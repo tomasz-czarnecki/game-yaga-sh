@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yaga Model Compare</title>
+  <style>
+    body { margin: 0; background: #1c1a19; color: #eee; font: 14px system-ui, sans-serif; overflow: hidden; }
+    header { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 16px; align-items: center; padding: 12px 16px; }
+    .labels { position: fixed; bottom: 16px; left: 0; right: 0; display: flex; justify-content: space-around; color: #bbb; pointer-events: none; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <header>
+    <label>Animation <select id="anim"></select></label>
+    <span id="status">Loading…</span>
+  </header>
+  <div class="labels"><span>Old: assets/pani-yaga.glb</span><span>New: assets/pani-yaga-dressed.glb</span></div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+    const MODELS = [
+      { url: 'assets/pani-yaga.glb', x: -0.45 },
+      { url: 'assets/pani-yaga-dressed.glb', x: 0.45 },
+    ];
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1c1a19);
+    scene.add(new THREE.GridHelper(4, 20, 0x444040, 0x2e2b2a));
+    scene.environment = await new RGBELoader().loadAsync('assets/yaga-studio.hdr');
+    scene.environment.mapping = THREE.EquirectangularReflectionMapping;
+
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+    camera.position.set(0, 0.6, 2.6);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.5, 0);
+
+    const loader = new GLTFLoader();
+    const loaded = await Promise.all(MODELS.map(async ({ url, x }) => {
+      const gltf = await loader.loadAsync(url);
+      gltf.scene.position.x = x;
+      scene.add(gltf.scene);
+      return { mixer: new THREE.AnimationMixer(gltf.scene), clips: gltf.animations };
+    }));
+
+    function play(name) {
+      for (const { mixer, clips } of loaded) {
+        mixer.stopAllAction();
+        const clip = clips.find(c => c.name === name);
+        if (clip) mixer.clipAction(clip).play();
+      }
+    }
+
+    const select = document.getElementById('anim');
+    for (const clip of loaded[1].clips) select.add(new Option(clip.name, clip.name));
+    select.value = 'idle.001';
+    select.addEventListener('change', () => play(select.value));
+    play('idle.001');
+    document.getElementById('status').textContent =
+      `Old: ${loaded[0].clips.length} animations · New: ${loaded[1].clips.length} animations`;
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize);
+    resize();
+
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(() => {
+      const dt = clock.getDelta();
+      for (const { mixer } of loaded) mixer.update(dt);
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
