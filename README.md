@@ -24,6 +24,8 @@ Edit the file, save, reload the page.
 
 After changing `words/en.json`, run `uv run --no-project python tools/check_words.py` to make sure no line the game asks for is missing.
 
+After exporting a model from Blender, run `uv run --no-project --with pillow python tools/shrink_textures.py <file.glb>`: it shrinks the textures to 1024 px so the game stays quick to load on a phone.
+
 ## Run it
 
 ```

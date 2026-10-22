@@ -848,8 +848,8 @@ async function boot() {
   const files = ['environment', 'pupu'], folder = { environment: 'environment', pupu: 'yaga' };
   const mb = { environment: 0.3, pupu: 0.2 };                     // rough sizes of the models, only for the loading bar
   const [yaga, broom, worldJson, wordsJson, boxLook, houseLook, , , , ...loaded] = await Promise.all([
-    loadGLB(loader, './assets/models/yaga/yaga-dressed.glb', 16.8),
-    loadGLB(loader, './assets/models/tools/broom.glb', 0.8),   // a prop in her hand, like the shovel
+    loadGLB(loader, './assets/models/yaga/yaga-dressed.glb', 9.5),   // also preloaded by index.html
+    loadGLB(loader, './assets/models/tools/broom.glb', 0.25),   // a prop in her hand, like the shovel
     getJSON('./assets/world/home.json'),
     getJSON('./words/en.json'),
     getJSON('./assets/models/box/box.json'),

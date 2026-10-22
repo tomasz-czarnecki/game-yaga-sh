@@ -40,6 +40,7 @@ A small 3D farm game. Yaga, a witch whose hut stands on chicken legs, lives in a
   - `bug-models.js`: draws the bugs, with colours and size from `assets/models/enemies/` (`loadBugLooks`).
   - `loading.js`: the loading screen (`#loading` in `index.html`): `getJSON` and `loadGLB` load every file and move the bar; `building()` shows the last step; `hide()` fades it out after her first frame.
 - `tools/check_words.py`: run `uv run --no-project python tools/check_words.py` after touching `words/en.json` or adding a line key; it lists every key the code asks for that is missing.
+- `tools/shrink_textures.py`: shrinks every texture inside a `.glb` to at most 1024 px (or the size given) and checks that nothing else in the file changed. Run `uv run --no-project --with pillow python tools/shrink_textures.py <file.glb>`.
 - `manual_uploads/`: the owner's Blender sources and drafts. Not committed; leave untouched.
 
 ## Gotchas
@@ -58,4 +59,7 @@ A small 3D farm game. Yaga, a witch whose hut stands on chicken legs, lives in a
 - **Looks in files, shapes in code:** the black box, the bugs and the hut are drawn in code, but their colours and sizes come from `box/box.json`, `enemies/*.json` and `environment/house.json`. A new colour key in one of those files does nothing until the code reads it. A new kind of ground block needs its file in `assets/world/blocks/` and a place in `BLOCKS` in `terrain.js`.
 - **A typo in a JSON file** shows "could not load her game files" on screen and names the file and line in the console.
 - **Load every file through `loading.js`** (`getJSON`, `loadGLB`), or the loading screen won't count it. Vercel compresses files and sends no size, so each `.glb` gets a rough size in MB at its `loadGLB` call in `boot()`; if a model changes size a lot, update that number (it only steers the bar).
+- **After exporting a model from Blender,** run `tools/shrink_textures.py` on it: exports come out with 4096 px textures, which made her file 16.8 MB and cost a phone about 600 MB of graphics memory. 1024 px looks the same even at the closest zoom. Then update its rough size at its `loadGLB` call in `boot()`.
+- **Her model is preloaded** by a `<link rel="preload" … as="fetch" crossorigin>` line at the top of `index.html`, so its download starts before the code has arrived. If the file moves, change that line together with the path in `boot()`, or the browser downloads it twice.
+- **Don't wait on `requestAnimationFrame` during loading.** It can stall in an embedded or hidden frame while the page still reports itself as visible. `loading.js` uses timers, and the screen fades out from `frame()`, which the game also runs from a timer.
 - **To test the loading screen,** serve the game slowly: a local server that sends files at about 1.5 MB/s without `Content-Length`, like a phone on Vercel. On a normal local server everything loads too fast to see.
