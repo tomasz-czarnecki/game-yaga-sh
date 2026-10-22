@@ -1,4 +1,4 @@
-// How the camera frames Pani Yaga at each zoom level. The camera is always a perspective one: far away
+// How the camera frames Yaga at each zoom level. The camera is always a perspective one: far away
 // with a tiny field of view it looks isometric, so zoom 0 is the classic view. Zooming out shows a little
 // more of the field; zooming in dollies the camera down and in, turning it from the isometric angle to a
 // human eye-level view of her and the Box.

@@ -1,6 +1,6 @@
-// Yaga Game: Pani Yaga living in the clearing. She hunts bugs, sleeps under the tree at night
+// Yaga Game: Yaga living in the clearing. She hunts bugs, sleeps under the tree at night
 // and complains about everything. World and brain come from the whybox.ai pet game; the black box
-// creature is replaced by the rigged, dressed 3D Pani Yaga (assets/models/pani-yaga-dressed.glb).
+// creature is replaced by the rigged, dressed 3D Yaga (assets/models/yaga-dressed.glb).
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
@@ -72,7 +72,7 @@ const GLOW = { bark: 0.3, leaf: 0.6, fruit: 2.6 };
 const PROP_SCALE = 0.7;
 const FRUITS = ['strawberry', 'orange', 'blueberry', 'mushroom'];   // hidden for now: she eats bugs
 const FOODS = BUGS.map((b) => b.id);
-const BUG_SIZE = 0.4;                     // bugs at 40% of the original game's size, so Pani Yaga towers over them
+const BUG_SIZE = 0.4;                     // bugs at 40% of the original game's size, so Yaga towers over them
 const BUG_S = 2.6 * BUG_SIZE;             // bug-models units → world
 const BUG_TAP_R = 0.45;                   // world radius of a bug's invisible tap target, so small bugs stay easy to tap
 const BOX_S = 0.2;                        // the black box sidekick: creature units → world (ankle-high to her)
@@ -111,7 +111,7 @@ const FACES = {
   snarl:  { up: 0.06, lo: -0.42, tilt: 0.48, es: 0.86 },
 };
 
-/* ───────────── Pani Yaga: the rigged 3D model from the homepage, driven by the same brain ───────────── */
+/* ───────────── Yaga: the rigged 3D model from the homepage, driven by the same brain ───────────── */
 // The brain talks to the pet through a small interface (pos, heading, startHop, want, touch, poke).
 // Hops become short walks; moods and moments pick one of her 31 animations.
 const YAGA_H = 2.1;                       // her height in world units
@@ -424,7 +424,7 @@ const FURLIGHT = {
   night: { sky: new THREE.Color('#6a5444'), ground: new THREE.Color('#0e0c0a'), key: new THREE.Color('#ffd6ae').multiplyScalar(0.9), root: new THREE.Color('#151210'), rim: 1.3 },
 };
 
-/** The black box: the original whybox.ai creature, now Pani Yaga's furry sidekick. */
+/** The black box: the original whybox.ai creature, now Yaga's furry sidekick. */
 class BlackBox {
   constructor() {
     const shells = MOBILE ? 14 : 30;
@@ -844,7 +844,7 @@ async function boot() {
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
   const [yaga, worldJson, wordsJson, , ...loaded] = await Promise.all([
-    loader.loadAsync('./assets/models/pani-yaga-dressed.glb'),
+    loader.loadAsync('./assets/models/yaga-dressed.glb'),
     fetch('./assets/worlds/home.json').then((r) => r.json()),
     fetch('./words/en.json').then((r) => r.json()),
     loadBoxModels(['hen', 'egg', 'pumpkin', 'cabbage', 'shovel']),   // kept in box-model.js, built by name
@@ -2897,7 +2897,7 @@ boot().catch((err) => {
   const m = document.createElement('p'); m.id = 'oops';
   // these two texts stay here, not in words/en.json: they must work when the words (or any game file) fail to load
   m.textContent = err.message === 'WebGL2 required'
-    ? 'Pani Yaga needs WebGL 2 to wake up. Try opening this page in Chrome or Safari.'
-    : 'Pani Yaga could not load her game files. Try reloading the page.';
+    ? 'Yaga needs WebGL 2 to wake up. Try opening this page in Chrome or Safari.'
+    : 'Yaga could not load her game files. Try reloading the page.';
   document.body.appendChild(m);
 });

@@ -102,7 +102,7 @@ for key in sorted(set(yaga) - used_yaga):
 for key in sorted(set(box) - used_box):
     notes.append(f"box.{key}: no code asks for it")
 
-print(f"{sum(len(v) for v in yaga.values())} lines for Pani Yaga in {len(yaga)} lists, {sum(len(v) for v in box.values())} for the Box in {len(box)}, {len(words['arguments'])} arguments.")
+print(f"{sum(len(v) for v in yaga.values())} lines for Yaga in {len(yaga)} lists, {sum(len(v) for v in box.values())} for the Box in {len(box)}, {len(words['arguments'])} arguments.")
 for n in notes:
     print("note:", n)
 for e in errors:

@@ -1,4 +1,4 @@
-// What Pani Yaga can hold. The broom is part of her model (its own mesh, which we can hide); the shovel is
+// What Yaga can hold. The broom is part of her model (its own mesh, which we can hide); the shovel is
 // built from boxes in the chunky style of the terrain, with its origin at her grip so it sits in her fist.
 import * as THREE from './lib/three.module.js';
 import SET from '../settings.js';
