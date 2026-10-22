@@ -5,6 +5,7 @@ import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
 import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint } from './terrain.js';
+import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -60,9 +61,6 @@ const OBSTACLES = [
   { x: 5.45, z: -1.85, r: 0.8 + BODY_R },
 ];
 const ROAM = { x0: -34, x1: 38, z0: -18, z1: 12 };   // the whole walkable field; the camera follows her around it
-// Diablo-style isometric camera: orthographic, 45° around and ~35° down, following her across the field.
-// Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
-const ISO = { yaw: Math.PI / 4, pitch: 0.62, dist: 40, minHalfH: 6.5, minHalfW: 5.0, aimY: 1.0 };
 // extra trees and rock clusters across the field (world x, z, size), so there is somewhere to go
 const SCENERY = {
   trees: [[-14, -6, 1.0], [18, -9, 0.9], [-25, 4, 0.8], [28, 3, 1.05], [7, -13, 0.75]],
@@ -758,8 +756,11 @@ function save() {
 
 /* ───────────── world ───────────── */
 const world = { items: [], poops: [], vanishing: [], falling: [], clods: [] };
-let renderer, scene, camera, pet, iconKit, area, view;
-const aim = new THREE.Vector3(2.3, ISO.aimY, 0);
+let renderer, scene, camera, viewCam, pet, iconKit, area, view;
+// Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
+// Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
+const aim = new THREE.Vector3(2.3, rigAt(0, 1).aimY, 0), look = new THREE.Vector3();
+let zoom = 0, zoomTarget = 0;
 const phase = { n: 0, cycleT: 0 };
 const stage = $('#stage');
 
@@ -777,8 +778,9 @@ async function boot() {
   stage.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(new THREE.Color(DAY.bg), ISO.dist + DAY.fog[0], ISO.dist + DAY.fog[1]);
-  camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 240);
+  scene.fog = new THREE.Fog(new THREE.Color(DAY.bg), DAY.fog[0], DAY.fog[1]);   // applyPhase sets the distances every frame
+  camera = new THREE.PerspectiveCamera(10, 1, 0.1, 500);
+  viewCam = new THREE.PerspectiveCamera(10, 1, 0.1, 500);                      // always the default framing: where bugs may spawn
 
   const hemi = new THREE.HemisphereLight(DAY.hemi.sky, DAY.hemi.ground, DAY.hemi.i); scene.add(hemi);
   const key = new THREE.DirectionalLight(DAY.key.c, DAY.key.i);
@@ -843,7 +845,7 @@ async function boot() {
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
   $('#loading').classList.add('gone');
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint };
+  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
@@ -977,7 +979,7 @@ function applyPhase(n) {
   const P = world.pal, L = world.lights, sun = Math.pow(n, 1.6);
   world.bgC.copy(world.dayBg).lerp(world.nightBg, n);
   if (Math.abs(n - (world.skyN ?? -1)) > 0.01) paintSky(world.skyW, world.skyH, n);
-  scene.fog.near = ISO.dist + lerp(DAY.fog[0], NIGHT.fog[0], n); scene.fog.far = ISO.dist + lerp(DAY.fog[1], NIGHT.fog[1], n);
+  scene.fog.near = world.camDist + lerp(DAY.fog[0], NIGHT.fog[0], n); scene.fog.far = world.camDist + lerp(DAY.fog[1], NIGHT.fog[1], n);
   L.hemi.color.copy(P.hemiSky[0]).lerp(P.hemiSky[1], n); L.hemi.groundColor.copy(P.hemiGnd[0]).lerp(P.hemiGnd[1], n);
   L.hemi.intensity = lerp(DAY.hemi.i, NIGHT.hemi.i, sun);
   L.key.color.copy(P.key[0]).lerp(P.key[1], n); L.key.intensity = lerp(DAY.key.i, NIGHT.key.i, sun);
@@ -1119,14 +1121,15 @@ function computeArea() {
 }
 /** The part of the field the camera shows right now. */
 function computeView() {
+  viewCam.aspect = camera.aspect; placeCamera(viewCam, rigAt(0, camera.aspect), aim, aim);
   const v = new THREE.Vector3(), W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight;
   const yMin = -1 + 2 * 28 / H;                          // feet stay clear of the bottom edge (the actions now live top-left)
   const fits = (x, z) => {
     for (const sx of [-BODY_R, BODY_R]) for (const sz of [-0.3, 0.3]) {
-      v.set(x + sx, 0.04, z + sz).project(camera);
+      v.set(x + sx, 0.04, z + sz).project(viewCam);
       if (Math.abs(v.x) > 0.96 || v.y < yMin || v.y > 0.8) return false;
     }
-    v.set(x, YAGA_H, z).project(camera);              // head in frame too
+    v.set(x, YAGA_H, z).project(viewCam);             // head in frame too
     return v.y < 0.9;
   };
   const ax = aim.x;
@@ -1178,13 +1181,9 @@ function resize() {
   const W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight;
   renderer.setSize(W, H);
   const aspect = W / H;
-  // the same ground scale everywhere; narrow phones widen the view so she isn't cramped
-  const halfH = Math.max(ISO.minHalfH, ISO.minHalfW / aspect);
-  Object.assign(camera, { left: -halfH * aspect, right: halfH * aspect, top: halfH, bottom: -halfH });
-  world.camOff = new THREE.Vector3(Math.sin(ISO.yaw) * Math.cos(ISO.pitch), Math.sin(ISO.pitch), Math.cos(ISO.yaw) * Math.cos(ISO.pitch)).multiplyScalar(ISO.dist);
-  camera.updateProjectionMatrix();
+  camera.aspect = aspect;
   if (pet) followCamera(1);
-  else { camera.position.copy(aim).add(world.camOff); camera.lookAt(aim); camera.updateMatrixWorld(); }
+  else { const rig = rigAt(zoom, aspect); world.camDist = rig.dist; placeCamera(camera, rig, aim, aim); }
   paintSky(W, H);
   computeArea();
   if (pet) { const c = resolveSpot(pet.pos.x, pet.pos.z); if (!pet.airborne) pet.pos.set(c.x, pet.pos.y, c.z); }
@@ -1192,11 +1191,14 @@ function resize() {
 
 /** Eases the camera after her (k: 0…1 of the way this frame); the key light and its shadow box come along. */
 function followCamera(k) {
-  const tx = clamp(pet.pos.x, ROAM.x0 + 7, ROAM.x1 - 7);
-  const tz = clamp(pet.pos.z, ROAM.z0 + 4, ROAM.z1 - 4);
-  aim.x = lerp(aim.x, tx, k); aim.z = lerp(aim.z, tz, k); aim.y = lerp(aim.y, ISO.aimY + pet.pos.y, k);
-  camera.position.copy(aim).add(world.camOff);
-  camera.lookAt(aim); camera.updateMatrixWorld();
+  const rig = rigAt(zoom, camera.aspect), inset = 1 - Math.max(0, zoom);   // close up she may walk right to the edge
+  const tx = clamp(pet.pos.x, ROAM.x0 + 7 * inset, ROAM.x1 - 7 * inset);
+  const tz = clamp(pet.pos.z, ROAM.z0 + 4 * inset, ROAM.z1 - 4 * inset);
+  aim.x = lerp(aim.x, tx, k); aim.z = lerp(aim.z, tz, k); aim.y = lerp(aim.y, rig.aimY + pet.pos.y, k);
+  const toBox = 0.45 * rig.close * rig.close;                              // close up, look a little towards the Box so both are in frame
+  look.set(aim.x + (Box.pet.pos.x - pet.pos.x) * toBox, aim.y, aim.z + (Box.pet.pos.z - pet.pos.z) * toBox);
+  world.camDist = rig.dist;
+  placeCamera(camera, rig, aim, look, (x, z) => groundY(x, z) + 0.6);
   const L = world.lights;
   L.key.position.set(aim.x - 6.5, 9.5, aim.z + 8.5); L.key.target.position.set(aim.x, 0, aim.z); L.key.target.updateMatrixWorld();
   if (!world.viewAt || world.viewAt.distanceTo(aim) > 0.6) computeView();
@@ -2064,7 +2066,7 @@ function tickHover(dt) {
     const d = camera.position.distanceTo(c);
     pet.hover = hoverV.copy(ray.ray.direction).multiplyScalar(d * 0.8).add(ray.ray.origin);
     const sc = screenOf(c), H = stage.clientHeight || innerHeight;
-    const r = BODY_R * H / (camera.top - camera.bottom);
+    const r = (BODY_R / (d * Math.tan((camera.fov * Math.PI) / 360))) * H / 2;
     near = 1 - smooth(r * 0.9, r * 2.2, Math.hypot(ptr.hx - sc.x, ptr.hy - sc.y));
   }
   pet.near = ease(pet.near, near, 5, dt);
@@ -2384,8 +2386,14 @@ function zz() {
   spawnFx('zz', s.x + 14, s.y - 20, 'z');
 }
 
+/** Scrolling zooms: out for a little more of the field, in towards a human view of her and the Box. */
+function onWheel(e) {
+  e.preventDefault();
+  zoomTarget = clamp(zoomTarget - e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015), ZOOM.min, ZOOM.max);
+}
 function bindUI() {
   const el = renderer.domElement;
+  addEventListener('wheel', onWheel, { passive: false });
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
@@ -2449,6 +2457,7 @@ function frame() {
   clock.t += dt; phase.cycleT += dt;
   phase.n = ease(phase.n, S.night ? 1 : 0, 1.4, dt);
   applyPhase(phase.n);
+  zoom = ease(zoom, zoomTarget, 7, dt);
   followCamera(1 - Math.exp(-2.2 * dt));
   tickHover(dt);
   tickBrain(dt);
