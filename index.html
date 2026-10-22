@@ -1,78 +1,240 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Yaga Labs · yaga.sh</title>
-  <meta name="description" content="Yaga Labs builds agentic products and interfaces that explain themselves.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <script src="main.js" defer></script>
-</head>
-<body>
-  <div class="grain" aria-hidden="true"></div>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Game · Yaga Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  /* One screen, one world: the clearing fills the viewport, the care tray docks in the thumb zone. */
+  :root {
+    --void: #151412;        /* the homepage's deep brown */
+    --cream: #F0EADC;       /* the homepage ink */
+    --gold: #D6A446;        /* the homepage gold: counts and alerts */
+    --accent: #CF6E42;      /* the homepage terracotta */
+    --warn: #DE8053;        /* the homepage highlight: low stats */
+    --ink: #1A1814;         /* thought-bubble outline, from the website */
+    --paper: #FCFBF8;       /* thought-bubble fill, from the website */
+    --glass: rgba(28, 26, 23, 0.74);
+    --line: rgba(240, 234, 220, 0.18);
+    --btn: clamp(46px, 12.6vw, 60px);
+    --display: 'Geist', system-ui, sans-serif;
+    --mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; overflow: hidden; background: var(--void); color: var(--cream);
+    font-family: var(--display); -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; touch-action: none; }
+  .vignette { position: fixed; inset: 0; pointer-events: none; }
+  .vignette { background: radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 40%, rgba(4,3,8,0.55) 100%); }
 
-  <header class="site-header">
-    <div class="site-header-inner">
-      <a href="#top" class="brand">
-        <span class="brand-mark"></span>
-        <span class="brand-name">YagaLabs</span>
-      </a>
-      <a href="#contact" class="btn btn-header">Talk to Yaga</a>
-    </div>
-  </header>
+  /* left column: stats, then the actions under them (bugs 3×2, poo beside) */
+  .side {
+    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  }
+  .dock { display: flex; align-items: flex-start; gap: 8px; }
+  .tray {
+    display: grid; grid-template-columns: repeat(3, var(--btn)); gap: 6px; padding: 8px;
+    border-radius: 22px; background: var(--glass); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .tray.poo { grid-template-columns: var(--btn); }
+  .sep { width: 1px; height: calc(var(--btn) * 0.6); background: var(--line); margin: 0 3px; flex: none; }
+  .care {
+    position: relative; flex: none; width: var(--btn); height: var(--btn); padding: 0;
+    border-radius: 50%; border: 1px solid var(--line); background: rgba(240, 234, 220, 0.09);
+    color: var(--cream); cursor: pointer; display: grid; place-items: center;
+    transition: transform 0.12s ease, background 0.2s ease;
+  }
+  .care:active { transform: scale(0.9); }
+  .care:focus-visible, .round:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .care canvas { width: 82%; height: 82%; display: block; pointer-events: none; }
+  .care svg { width: 52%; height: 52%; display: block; pointer-events: none; }
+  .care.wanted { background: rgba(214, 164, 70, 0.22); border-color: var(--gold); animation: nudge 1.6s ease-in-out infinite; }
+  .care.dim { opacity: 0.45; }
+  .count {
+    position: absolute; right: -4px; bottom: -4px; min-width: 20px; height: 20px; padding: 0 5px;
+    border-radius: 999px; background: var(--cream); color: var(--ink);
+    font: 500 11px/20px var(--mono); font-variant-numeric: tabular-nums; text-align: center;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.25); pointer-events: none;
+  }
+  .count.alert { background: var(--gold); }
+  @keyframes nudge { 0%, 100% { transform: translateY(0); } 12% { transform: translateY(-5px) rotate(-6deg); } 24% { transform: translateY(0) rotate(4deg); } 32% { transform: rotate(0); } }
 
-  <main>
-    <section id="top" class="hero">
-      <div class="hero-grid">
-        <div class="hero-figure">
-          <div class="yaga">
-            <div class="yaga-glow"></div>
-            <div class="yaga-shadow"></div>
-            <div class="yaga-sway">
-              <img src="assets/pani-yaga.webp" alt="Pani Yaga: an old witch with red curly hair, round black glasses, a YAGA LABS hoodie, an embroidered folk skirt and a birch broom">
-            </div>
-            <div class="bubble" aria-live="polite">
-              <div class="bubble-cloud">
-                <span class="bubble-ghost">Three hundred years I read tea leaves. Now they call it a confidence interval.</span>
-                <span class="bubble-text"><span class="bubble-typed"></span><span class="bubble-rest"></span></span>
-              </div>
-              <div class="bubble-dot bubble-dot-small"></div>
-              <div class="bubble-dot bubble-dot-large"></div>
-            </div>
-          </div>
-        </div>
+  /* her portrait, top left, beside the stats */
+  .head { display: flex; align-items: center; gap: 10px; }
+  .portrait {
+    width: 78px; height: 78px; flex: none; border-radius: 50%; object-fit: cover; pointer-events: none;
+    background: var(--glass); border: 2px solid var(--accent); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  /* phones: the portrait and the day clock share the top row, so the stats drop their words and keep the bars */
+  @media (max-width: 640px) {
+    .portrait { width: 58px; height: 58px; } .head { gap: 8px; }
+    .stats .stat { grid-template-columns: 66px minmax(70px, 1fr); }
+    .stats .stat .val { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  }
 
-        <div class="hero-copy">
-          <div class="eyebrow"><span class="diamond"></span><span>Yaga Labs · Agentic products</span></div>
-          <h1>She complains about AI. Then she <span class="accent">ships&nbsp;it.</span></h1>
-          <p class="lead">Yaga Labs builds agentic products and <span class="highlight">interfaces that explain themselves</span>. Pani Yaga is the studio's conscience. She has opinions about your model, and she's usually right.</p>
-          <div class="actions">
-            <a href="game/" class="btn btn-caps">Play a game</a>
-          </div>
-        </div>
-      </div>
+  /* stats, top left: how full, how entertained */
+  .stats {
+    display: grid; gap: 9px; padding: 12px 14px; border-radius: 18px;
+    background: var(--glass); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
+  }
+  .stat { display: grid; grid-template-columns: 78px minmax(84px, 120px) 64px; align-items: center; gap: 10px; font: 500 11px/1 var(--mono); }
+  .stat .lbl { letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240, 234, 220, 0.72); }
+  .stat .bar { height: 8px; border-radius: 999px; background: rgba(240, 234, 220, 0.12); overflow: hidden; }
+  .stat .bar i { display: block; height: 100%; width: 50%; border-radius: inherit; background: var(--gold); transition: width 0.6s ease, background 0.3s ease; }
+  .stat .val { color: var(--cream); text-align: right; letter-spacing: 0.02em; }
+  .stat.low .bar i { background: var(--warn); animation: lowpulse 1.4s ease-in-out infinite; }
+  .stat.low .val { color: var(--warn); }
+  @keyframes lowpulse { 50% { opacity: 0.45; } }
+  @media (max-width: 600px) { .stat { grid-template-columns: 70px minmax(52px, 1fr) 58px; gap: 8px; } .stats { padding: 11px 12px; } }
 
-      <div class="embroidery" aria-hidden="true"></div>
-    </section>
+  /* day clock, top right next to the sound button: one day every 5 minutes */
+  .clock {
+    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 66px;
+    height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 4px; border-radius: 999px; box-sizing: border-box;
+    background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
+  }
+  .clock svg { width: 36px; height: 36px; display: block; flex: none; }
+  .clock .tx { display: grid; gap: 3px; }
+  .clock b { font: 500 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--cream); letter-spacing: 0.02em; }
+  .clock span { font: 500 10px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(240, 234, 220, 0.62); }
+  .clock.night b { color: #C9C3B1; }
+  @media (max-width: 600px) { .clock { padding: 0 3px; gap: 0; } .clock .tx { display: none; } }
 
-    <section id="contact" class="contact">
-      <div class="contact-inner">
-        <div class="eyebrow eyebrow-small"><span class="diamond"></span>Pani Yaga, taking questions</div>
-        <h2>Bring me your model. I'll tell you <span class="accent">what's wrong with it.</span></h2>
-        <p class="contact-lead">Tell her what it predicts and who ignores it. She'll tell you what to build first.</p>
-        <div class="actions actions-contact">
-          <a href="mailto:hello@yaga.sh" class="btn btn-email">hello@yaga.sh</a>
-        </div>
-        <div class="divider"></div>
-        <div class="footer-row">
-          <span class="footer-brand"><span class="footer-mark"></span>Yaga Labs</span>
-          <span class="copyright">© 2026 · yaga.sh</span>
-        </div>
-      </div>
-    </section>
-  </main>
-</body>
-</html>
+  .round {
+    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px;
+    width: 44px; height: 44px; border-radius: 50%; padding: 0; cursor: pointer;
+    background: var(--glass); border: 1px solid var(--line); color: var(--cream);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: grid; place-items: center;
+  }
+  .round svg { width: 20px; height: 20px; }
+
+  /* the thought bubble: pictures only, same drawing as the website's */
+  #bubble { position: fixed; left: 0; top: 0; pointer-events: none; will-change: transform; transform-origin: 0 100%; }
+  #bubble .cloud {
+    padding: 5px 9px; background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 46% 54% 50% 50% / 60% 52% 48% 40%; box-shadow: 3px 3px 0 var(--ink);
+    display: grid; place-items: center; animation: bob 2.4s ease-in-out infinite;
+  }
+  #bubble canvas, #bubble svg { width: 54px; height: 54px; display: block; }
+  #bubble .dot { position: absolute; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); box-sizing: border-box; }
+  #bubble.pop .cloud { animation: pop 0.42s cubic-bezier(.2,1.6,.4,1) both, bob 2.4s 0.42s ease-in-out infinite; }
+  @keyframes pop { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
+
+  /* little effects: hearts, sleep z's, sparkles */
+  #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .fx { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+  .heart { width: 26px; height: 26px; animation: rise 1.3s ease-out forwards; }
+  .zz { font: 800 26px/1 var(--display); color: var(--cream); -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke; animation: drift 2.6s ease-out forwards; }
+  .spark { width: 18px; height: 18px; animation: burst 0.7s ease-out forwards; }
+  @keyframes rise { from { opacity: 0; translate: 0 0; scale: 0.4; } 15% { opacity: 1; scale: 1; } to { opacity: 0; translate: var(--dx, 0px) -90px; scale: 0.9; } }
+  @keyframes drift { from { opacity: 0; translate: 0 0; scale: 0.5; } 20% { opacity: 1; } to { opacity: 0; translate: 36px -110px; scale: 1.3; } }
+  @keyframes burst { from { opacity: 1; translate: 0 0; scale: 0.3; } to { opacity: 0; translate: var(--dx) var(--dy); scale: 1; rotate: 90deg; } }
+
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--void); transition: opacity 0.6s ease; }
+  #loading .box { width: 64px; height: 64px; border-radius: 30%; background: #2a241f; box-shadow: 0 0 60px rgba(207,110,66,0.45); animation: breathe 1.4s ease-in-out infinite; }
+  #loading.gone { opacity: 0; pointer-events: none; }
+  @keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.08, 0.92) translateY(3px); } }
+  #oops { position: fixed; inset: auto 16px 50% 16px; text-align: center; font: 700 18px/1.4 var(--display); }
+
+  /* the speech cloud: the homepage's typewriter thought, same ink and paper */
+  #say, #saybox { position: fixed; left: 0; top: 0; width: max-content; pointer-events: none; opacity: 0; transform-origin: 0 0; will-change: transform, opacity; }
+  #say .cl, #saybox .cl { width: max-content; max-width: 210px; padding: 12px 20px 13px; background: var(--paper); border: 2px solid var(--ink); border-radius: 30px 34px 32px 28px / 28px 32px 30px 34px; box-shadow: 3px 3px 0 var(--ink); font: 500 13px/1.25 'Geist Mono', var(--mono); letter-spacing: 0.02em; color: var(--ink); text-wrap: balance; opacity: 0; }
+  #say .d, #saybox .d { position: absolute; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); box-sizing: border-box; opacity: 0; }
+  #say .d1, #saybox .d1 { width: 7px; height: 7px; }
+  #say .d2, #saybox .d2 { width: 12px; height: 12px; }
+  #say .gl, #saybox .gl { color: var(--accent); display: inline-block; animation: jit 0.12s steps(1) infinite; }
+  @keyframes jit { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, 1px); } }
+
+  .home {
+    position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    height: 36px; display: flex; align-items: center; padding: 0 14px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--line); color: var(--cream); text-decoration: none;
+    font: 500 11px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .home:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+  /* the black box talks in ink: its cloud is the negative of hers */
+  #saybox .cl { background: var(--ink); color: var(--cream); border-color: var(--cream); box-shadow: 3px 3px 0 rgba(0,0,0,0.6); }
+  #saybox .d { background: var(--ink); border-color: var(--cream); box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .care.wanted, #bubble .cloud, #loading .box, #say .gl, #saybox .gl { animation: none; }
+  }
+</style>
+
+<div id="stage" aria-label="Pani Yaga and her black box in the clearing. Tap the ground to call her, tap her or the box to poke them, stroke her to pet her. They talk back, mostly to each other."></div>
+<div class="vignette"></div>
+<div id="fx"></div>
+
+<div id="bubble" hidden>
+  <div class="cloud"><canvas id="bubbleIcon" width="108" height="108"></canvas>
+    <svg id="bubbleMoon" viewBox="0 0 54 54" hidden aria-hidden="true"><path d="M33 9a19 19 0 1 0 12 30A16 16 0 0 1 33 9Z" fill="#D6A446" stroke="#1A1814" stroke-width="2.5" stroke-linejoin="round"/><circle cx="41" cy="13" r="2.2" fill="#1A1814"/><circle cx="46" cy="22" r="1.4" fill="#1A1814"/></svg>
+  </div>
+  <span class="dot" style="width:12px;height:12px;left:4px;bottom:-16px"></span>
+  <span class="dot" style="width:7px;height:7px;left:-2px;bottom:-26px"></span>
+</div>
+
+<div id="saybox" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
+<div id="say" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
+
+<div class="clock" id="clock" role="timer" aria-label="Time of day">
+  <svg viewBox="0 0 40 40" aria-hidden="true">
+    <circle cx="20" cy="20" r="15" fill="none" stroke="#3a3129" stroke-width="4"/>
+    <circle cx="20" cy="20" r="15" fill="none" stroke="#D6A446" stroke-width="4" stroke-dasharray="54.98 94.25" transform="rotate(180 20 20)"/>
+    <g id="dialHand" transform="rotate(0 20 20)">
+      <line x1="20" y1="20" x2="20" y2="8.5" stroke="#F0EADC" stroke-width="2" stroke-linecap="round"/>
+      <circle id="dialSun" cx="20" cy="5" r="3.4" fill="#D6A446" stroke="#1A1814" stroke-width="1.2"/>
+    </g>
+    <circle cx="20" cy="20" r="2.2" fill="#F0EADC"/>
+  </svg>
+  <div class="tx"><b id="clockTime">09:00</b><span id="clockNext">night in 2:55</span></div>
+</div>
+
+<button class="round" id="sound" aria-label="Sound off">
+  <svg id="iconSoundOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+  <svg id="iconSoundOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+</button>
+
+<div class="side">
+<div class="head">
+<img class="portrait" src="assets/yaga-face.png" alt="Pani Yaga" width="256" height="256">
+<section class="stats" aria-label="How it's doing">
+  <div class="stat" id="statHunger" role="meter" aria-label="Hunger: how full it is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Hunger</span><span class="bar"><i></i></span><span class="val">fed</span></div>
+  <div class="stat" id="statHealth" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="90"><span class="lbl">Health</span><span class="bar"><i></i></span><span class="val">healthy</span></div>
+  <div class="stat" id="statJoy" role="meter" aria-label="Happiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Happiness</span><span class="bar"><i></i></span><span class="val">fine</span></div>
+</section>
+</div>
+
+<div class="dock">
+  <nav class="tray" aria-label="Bugs out there: tap one to hunt it">
+    <button class="care food" data-food="ladybug" aria-label="Hunt a ladybug"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="firefly" aria-label="Hunt a firefly"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="caterpillar" aria-label="Hunt a caterpillar"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="snail" aria-label="Hunt a snail"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="ant" aria-label="Hunt an ant"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="beetle" aria-label="Hunt a jewel beetle"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+  </nav>
+  <nav class="tray poo" aria-label="Poo to clean">
+    <button class="care" id="clean" aria-label="Clean up the poo"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+  </nav>
+</div>
+</div>
+
+<a class="home" href="https://yaga.sh/">← YagaLabs</a>
+
+<div id="loading" role="status" aria-label="Waking Pani Yaga"><div class="box"></div></div>
+
+<script type="module" src="./app.js"></script>
+
+
+</body></html>

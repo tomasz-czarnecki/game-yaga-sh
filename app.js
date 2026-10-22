@@ -793,7 +793,7 @@ async function boot() {
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
   const [yaga, ...loaded] = await Promise.all([
-    loader.loadAsync('../assets/pani-yaga-dressed.glb'),
+    loader.loadAsync('./assets/pani-yaga-dressed.glb'),
     ...files.map((f) => loader.loadAsync(`./assets/${f}.glb`)),
   ]);
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
