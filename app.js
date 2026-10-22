@@ -4,9 +4,10 @@
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
-import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint } from './terrain.js';
+import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
+import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -737,7 +738,7 @@ const Sound = {
 const S = {
   hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
   eaten: Object.fromEntries(FOODS.map((f) => [f, 0])), meals: 0, crave: null, lastCrave: null,
-  poops: [], sound: true, away: -1,
+  poops: [], farm: [], sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]
 };
 function load() {
   try { loadSave(); } catch (e) { /* storage unavailable: start fresh */ }
@@ -752,6 +753,7 @@ function loadSave() {
     Object.assign(S, { hunger: d.hunger, energy: d.energy, joy: d.joy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, meals: d.meals | 0, crave: d.crave || null, sound: d.sound !== false });
     if (d.eaten) Object.assign(S.eaten, d.eaten);
     S.poops = Array.isArray(d.poops) ? d.poops.slice(0, 5) : [];
+    S.farm = Array.isArray(d.farm) ? d.farm.slice(0, 300) : [];
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
     S.away = away;
     S.hunger = clamp((S.hunger ?? 0.5) + away / (3 * 3600), 0, 0.95);
@@ -766,13 +768,13 @@ function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
-      eaten: S.eaten, poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
+      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
     }));
   } catch (e) { /* ignore */ }
 }
 
 /* ───────────── world ───────────── */
-const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], faintUntil: 0 };
+const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], plots: [], faintUntil: 0 };
 let renderer, scene, camera, viewCam, pet, iconKit, area, view;
 // Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
 // Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
@@ -822,6 +824,7 @@ async function boot() {
 
   loadWorld(worldJson, SPAWN);
   world.terrain = terrainMeshes(); scene.add(world.terrain.group);
+  for (const f of S.farm) addPlot(f.x, f.z, f.crop, f.at);          // the plots she dug before
 
   const env = loaded[0].scene; dress(env);
   env.position.set(0.1, 0, -1.7);
@@ -847,7 +850,7 @@ async function boot() {
   Box.pet.root.position.set(1.9, groundY(1.9, 1.9), 1.9);
   scene.add(Box.pet.root);
 
-  marker();
+  marker(); makeCellMark();
   iconKit = makeIcons();
   bindUI();
   resize();
@@ -862,7 +865,7 @@ async function boot() {
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
   $('#loading').classList.add('gone');
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
+  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
@@ -1423,6 +1426,119 @@ function killFoe(f) {
   S.mana = clamp(S.mana + 0.12, 0, 1); say('foeDown', { cool: 5 });
 }
 
+/* ───────────── the farm: the shovel digs farmland ───────────── */
+const FARMABLE = ['dirt', 'grass', 'field'];
+/** Can this block become farmland? Plain dry ground, not hugging the hut, the tree or the rocks. */
+function canDig(x, z) {
+  return FARMABLE.includes(kindAt(x, z)) && walkable(x, z) && !OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r - BODY_R + 0.7);
+}
+const plotAt = (x, z) => { const c = blockCentre(x, z); return world.plots.find((p) => p.x === c.x && p.z === c.z); };
+/** Turns a block into farmland and remembers it. */
+function addPlot(x, z, crop = null, at = 0) {
+  tillCell(x, z);
+  const plot = { x, z, crop, at, stage: -1, root: null };
+  world.plots.push(plot);
+  showCrop(plot);
+  return plot;
+}
+/** Draws a plot's crop at its current growth stage; a stage that just grew pops up from small. */
+function showCrop(plot) {
+  const stage = plot.crop ? stageOf(plot) : -1;
+  if (plot.stage === stage) return;
+  const grew = plot.stage >= 0 && stage > plot.stage;
+  plot.stage = stage;
+  if (plot.root) scene.remove(plot.root);
+  plot.root = null;
+  if (!plot.crop) return;
+  const root = plot.root = makeCrop(plot.crop, stage);
+  root.position.set(plot.x, groundY(plot.x, plot.z), plot.z);
+  root.traverse((o) => { o.userData.plot = plot; });
+  if (grew) root.scale.setScalar(0.4);
+  scene.add(root);
+}
+/** Crops grow with the clock (also while the tab is closed): check them once a second, and ease new growth up to size. */
+function tickFarm(dt) {
+  world.farmT = (world.farmT || 0) - dt;
+  if (world.farmT <= 0) { world.farmT = 1; world.plots.forEach(showCrop); }
+  for (const p of world.plots) if (p.root && p.root.scale.x < 1) p.root.scale.setScalar(Math.min(1, ease(p.root.scale.x, 1.05, 9, dt)));
+}
+/** The plot whose crop the tap ray hits: crops stand above their block, so the ground under the tap is a block too far. */
+function hitPlot() {
+  const hits = ray.intersectObjects(world.plots.map((p) => p.root).filter(Boolean), true);
+  return hits.length ? hits[0].object.userData.plot : null;
+}
+/** Plants whichever crop she has fewer of, so the field stays mixed. */
+function nextCrop() {
+  const n = (k) => world.plots.filter((p) => p.crop === k).length;
+  return n(CROPS[0]) <= n(CROPS[1]) ? CROPS[0] : CROPS[1];
+}
+/** Tap with the shovel: dig plain ground into farmland, plant tilled soil, harvest a ripe crop, or hurry a growing one with mana. */
+function tapShovel(hit) {
+  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
+  const pl = hitPlot(), c = pl ? { x: pl.x, z: pl.z } : blockCentre(hit.x, hit.z), plot = pl || plotAt(c.x, c.z);
+  ring(new THREE.Vector3(c.x, groundY(c.x, c.z), c.z));
+  if (!plot) return canDig(c.x, c.z) ? orderFarm('dig', c) : say('cantDig', { cool: 4 });
+  if (!plot.crop) return orderFarm('plant', c, nextCrop());
+  orderFarm(stageOf(plot) === 2 ? 'harvest' : 'grow', c);
+}
+/** Walks her to her own side of the block, then the action starts (see arrive). */
+function orderFarm(act, c, crop = null) {
+  if (FARM[act].mana && S.mana < FARM[act].mana) return say('noMana', { cool: 5 });
+  if (S.energy < FARM[act].cost) return say('tired', { cool: 5 });
+  const dx = pet.pos.x - c.x, dz = pet.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
+  const spot = resolveSpot(c.x + (dx / d) * 1.0, c.z + (dz / d) * 1.0);
+  brain.farm = { act, crop, x: c.x, z: c.z, t: 0, beat: 0, done: false };
+  go(new THREE.Vector3(spot.x, 0, spot.z), 'farm', false);
+}
+function startFarm() {
+  const F = brain.farm, A = FARM[F.act];
+  brain.mode = 'farm'; F.t = 0; F.beat = 0; F.done = false;
+  S.energy = clamp(S.energy - A.cost, 0, 1); S.mana = clamp(S.mana - (A.mana || 0), 0, 1);
+  pet.faceTo = Math.atan2(F.x - pet.pos.x, F.z - pet.pos.z);
+  pet.play(A.clip, A.dur, true);
+}
+let cellMark;
+function makeCellMark() {
+  cellMark = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.4, depthWrite: false }));
+  cellMark.rotation.x = -Math.PI / 2; cellMark.visible = false; scene.add(cellMark);
+}
+/** With the shovel, a flat square outlines the block under the cursor: gold when she can work it, red when she can't. */
+function moveCellMark() {
+  const h = S.tool === 'shovel' && !MOBILE ? hitGround() : null;             // the ray is already set by toNdc
+  cellMark.visible = !!h;
+  if (!h) return;
+  const pl = hitPlot(), c = pl ? { x: pl.x, z: pl.z } : blockCentre(h.x, h.z), plot = pl || plotAt(c.x, c.z);
+  const ok = plot ? !plot.crop || stageOf(plot) === 2 || S.mana >= FARM.grow.mana : canDig(c.x, c.z);
+  cellMark.material.color.setHex(ok ? GLOW_COLOR : 0xC8442F);
+  cellMark.position.set(c.x, groundY(c.x, c.z) + 0.03, c.z);
+}
+/** A sparkle over a block, where the crop is. */
+function sparkleAt(x, z) {
+  const s = screenOf(new THREE.Vector3(x, groundY(x, z) + 0.3, z)); sparkle(s.x, s.y);
+}
+/** A few clods fly up where the shovel hit. */
+function dirtBurst(x, z, n) {
+  const y = groundY(x, z);
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(DIRT_GEO, DIRT_MAT); m.scale.setScalar(rand(0.04, 0.09)); m.castShadow = true;
+    m.position.set(x + rand(-0.15, 0.15), y + 0.1, z + rand(-0.15, 0.15)); scene.add(m);
+    world.clods.push({ m, v: new THREE.Vector3(rand(-1.1, 1.1), rand(2.2, 3.6), rand(-1.1, 1.1)), spin: rand(-12, 12), dead: 0, floor: y + 0.02 });
+  }
+}
+/** The result of a farm action lands. */
+function finishFarm(F) {
+  if (F.act === 'dig') { addPlot(F.x, F.z); say('dug', { force: true }); }
+  const plot = plotAt(F.x, F.z);
+  if (F.act === 'plant') { plot.crop = F.crop; plot.at = Date.now(); showCrop(plot); say('planted', { force: true }); }
+  if (F.act === 'harvest') {                              // the crop is food: she eats her harvest
+    plot.crop = null; plot.at = 0; showCrop(plot); sparkleAt(F.x, F.z); Sound.yum();
+    S.hunger = clamp(S.hunger - 0.3, 0, 1); S.joy = clamp(S.joy + 0.06, 0, 1); S.health = clamp(S.health + 0.05, 0, 1);
+    say('harvest', { force: true });
+  }
+  if (F.act === 'grow') { plot.at = Date.now() - GROW.ripe * 1000; showCrop(plot); sparkleAt(F.x, F.z); Sound.chime(); say('grown', { force: true }); }
+  save();
+}
+
 function startWalk(it, exit = null) {
   it.walk = { base: (BUG_SPEED[it.kind] || 0.7) * rand(0.75, 1.3), v: 0, heading: it.root.rotation.y, rest: rand(0.2, 0.9), exit, bt: 0 };
   it.walk.goal = bugTarget(it, exit);
@@ -1530,7 +1646,7 @@ function tickProps(dt) {
 
 /* ───────────── the brain ───────────── */
 const clock = { t: 0 };
-const BUSY = ['eat', 'poop', 'clean', 'attack'];     // modes she is not interrupted in
+const BUSY = ['eat', 'poop', 'clean', 'attack', 'farm'];     // modes she is not interrupted in
 const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, poopAt: null, noticed: null, noticeAt: -9,
   reactUntil: 0, contentUntil: 0, yawnAt: 8, lookAt: null, eatT: 0, celebrate: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
   pokes: [], lastPoke: -99, grinUntil: 0, cleanQ: [], poo: null, cleanT: 0, cleaned: false };
@@ -1565,6 +1681,7 @@ function arrive() {
   const pur = brain.purpose;
   if (pur === 'food' && brain.food && world.items.includes(brain.food)) return startEat(brain.food);
   if (pur === 'attack' && brain.foe && world.items.includes(brain.foe)) return startAttack(brain.foe);
+  if (pur === 'farm' && brain.farm) return startFarm();
   if (pur === 'clean') {
     brain.mode = 'clean'; brain.cleanT = 0; brain.cleaned = false; brain.cl = null;
     setTimeout(() => boxReact('spell', 0.6), 1200);
@@ -1744,6 +1861,14 @@ function tickBrain(dt) {
         else if (Math.hypot(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z) < SWING.reach) startAttack(f);
         else go(f.root.position.clone(), 'attack', true);   // the hit shoved it back: step in again
       }
+      break;
+    }
+    case 'farm': {
+      const F = brain.farm, A = FARM[F.act]; F.t += dt;
+      up = 0.5;
+      while (F.beat < A.beats.length && F.t >= A.beats[F.beat]) { if (A.dirt) dirtBurst(F.x, F.z, A.dirt); Sound.thud(); F.beat++; }
+      if (!F.done && F.t >= A.doneAt) { F.done = true; finishFarm(F); }
+      if (F.t >= A.dur) { brain.mode = 'idle'; brain.until = 0.6; brain.farm = null; }
       break;
     }
     case 'eat': {
@@ -1928,6 +2053,12 @@ const LINES = {
   tired: [`too tired to swing.`, `give me a minute. #@%!.`, `arms. noodles. wait.`],
   foeDown: [`and stay down.`, `one less. forty to go.`, `squish. next.`],
   faint: [`i'm not dead. just resting. loudly.`, `the ground is nice. i'll stay.`],
+  dug: [`farmland. i'm a farmer now. help.`, `nice dirt. now it needs a plan.`, `one plot. forty to go.`],
+  cantDig: [`can't dig that. plain dirt or grass, please.`, `that is water, stone or rude.`, `not there. i have standards.`],
+  planted: [`in it goes. now we wait. i hate waiting.`, `grow. or don't. i'm not your mother.`, `seeds. in dirt. what a plan.`],
+  noMana: [`not ripe. and no mana to hurry it.`, `it needs time or mana. i have neither.`, `wait a day. or wait for mana.`],
+  harvest: [`ripe. delicious. mine.`, `crunch. farming is fine, actually.`, `harvested. and eaten. efficient.`],
+  grown: [`grow up. now.`, `magic. the dirt never saw it coming.`, `one day in one second. you're welcome.`],
   nobug: [`no {bug}s around. wait for one.`, `zero {bug}s found. 404.`, `{bug}? not here. try again later.`],
   busy: [`not now. i'm handling it.`, `busy. very busy. smelly busy.`],
   sick: [`i feel #@%!. tap the poo.`, `health: declining. poo: abundant.`, `this place is a biohazard.`, `tap it. i'll clean it. i'm not an animal.`],
@@ -2262,6 +2393,7 @@ function onDown(e) {
   const hit = hitGround();
   if (!hit) return;
   if (brain.mode === 'sleep') return poke();
+  if (S.tool === 'shovel') return tapShovel(hit);
   const s = resolveSpot(hit.x, hit.z);
   ring(new THREE.Vector3(s.x, groundY(s.x, s.z), s.z));
   if (BUSY.includes(brain.mode)) return;
@@ -2279,7 +2411,7 @@ function touchAt(hit, vx, vy) {
 function onMove(e) {
   ptr.hx = e.clientX; ptr.hy = e.clientY; ptr.hoverAt = clock.t;
   if (!ptr.down) {
-    if (!MOBILE) { toNdc(e); renderer.domElement.style.cursor = hitPet() || hitItem([...world.poops, ...world.items.filter((i) => i.state === 'rest')]) ? 'pointer' : ''; }
+    if (!MOBILE) { toNdc(e); renderer.domElement.style.cursor = hitPet() || hitItem([...world.poops, ...world.items.filter((i) => i.state === 'rest')]) ? 'pointer' : ''; moveCellMark(); }
     return;
   }
   if (e.pointerId !== ptr.id || !ptr.onPet) return;
@@ -2455,7 +2587,7 @@ function showTool() { for (const b of toolEls) b.setAttribute('aria-checked', St
 /** Puts the broom or the shovel in her hand. */
 function setTool(name) {
   if (S.tool === name) return;
-  S.tool = name; showTool(); pet.holds(name); Sound.equip(); save();
+  S.tool = name; showTool(); pet.holds(name); cellMark.visible = false; Sound.equip(); save();
 }
 function setStat(el, v, word) {
   const pct = Math.round(clamp(v, 0, 1) * 100);
@@ -2571,7 +2703,7 @@ function bindUI() {
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
   el.addEventListener('pointercancel', onUp);
-  el.addEventListener('pointerleave', () => { ptr.hoverAt = -99; el.style.cursor = ''; });
+  el.addEventListener('pointerleave', () => { ptr.hoverAt = -99; el.style.cursor = ''; cellMark.visible = false; });
   document.querySelectorAll('.care.food').forEach((b) => b.addEventListener('click', () => {
     Sound.init(); noteInput();
     orderHunt(b.dataset.food);
@@ -2620,7 +2752,7 @@ function simulate(dt) {
   if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
   tickBox(dt); Box.pet.update(dt, clock.t, camera);
   if (!Box.pet.airborne) { const c = clampXZ(Box.pet.pos.x, Box.pet.pos.z); Box.pet.pos.x = c.x; Box.pet.pos.z = c.z; }
-  tickProps(dt);
+  tickProps(dt); tickFarm(dt);
   tickMarker(dt);
 }
 function advance(sec) { for (let i = 0; i < sec * 30; i++) simulate(1 / 30); applyPhase(phase.n); tickHUD(); tickTalk(clock.t); tickBoxTalk(clock.t); renderer.render(scene, camera); }
@@ -2639,7 +2771,7 @@ function frame() {
   if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
   tickBox(dt); Box.pet.update(dt, clock.t, camera);
   if (!Box.pet.airborne) { const c = clampXZ(Box.pet.pos.x, Box.pet.pos.z); Box.pet.pos.x = c.x; Box.pet.pos.z = c.z; }
-  tickProps(dt);
+  tickProps(dt); tickFarm(dt);
   tickMarker(dt);
   tickHouse(dt, clock.t);
   iconKit.tick(dt, clock.t);

@@ -12,6 +12,7 @@ const TYPES = {
   road: { top: 0x6d5f52, side: 0x4a4037 },
   sand: { top: 0x85785f, side: 0x5f5443 },
   stone: { top: 0x5d5b5c, side: 0x3b3a3c },
+  tilled: { top: 0x3b2b21, top2: 0x2c2019, side: 0x2f261f },   // farmland she dug: dark furrows, alternating by row
 };
 const PALETTE = Object.fromEntries(Object.entries(TYPES).map(([k, t]) => [k, {
   top: new THREE.Color(t.top), top2: new THREE.Color(t.top2 ?? t.top), side: new THREE.Color(t.side),
@@ -142,6 +143,28 @@ export function groundY(x, z) {
   return k < 0 ? 0 : grid.top[k];
 }
 
+/** The type of the block under a point ('dirt', 'grass', 'tilled'…; a pond's bed reads as 'sand'), '' beyond the map. */
+export function kindAt(x, z) {
+  const k = cellAt(x, z);
+  return k < 0 ? '' : grid.kind[k];
+}
+
+/** The centre of the block under a point. */
+export function blockCentre(x, z) {
+  const s = grid.cell;
+  return { x: grid.ox + (Math.floor((x - grid.ox) / s) + 0.5) * s, z: grid.oz + (Math.floor((z - grid.oz) / s) + 0.5) * s };
+}
+
+/** Digs a block into farmland: its type becomes 'tilled' and only its own four vertices are recoloured. */
+export function tillCell(x, z) {
+  const k = cellAt(x, z);
+  if (k < 0) return;
+  grid.kind[k] = 'tilled';
+  const t = PALETTE.tilled, c = new THREE.Color().copy((((k / grid.cols) | 0) % 2) ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05));
+  for (let v = 0; v < 4; v++) grid.colors.setXYZ(grid.topVert[k] + v, c.r, c.g, c.b);
+  grid.colors.needsUpdate = true;
+}
+
 /** A stable per-face brightness wobble, so the blocks don't look stamped. */
 const jitter = (k, salt, amp) => 1 + amp * ((((k * 2654435761 + salt * 40503) >>> 0) / 4294967295) * 2 - 1);
 
@@ -158,6 +181,7 @@ function quads() {
       col.push(c.r, c.g, c.b);
     }
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    return base;                                    // the quad's first vertex, so its colour can be changed later
   };
   const geometry = () => {
     const g = new THREE.BufferGeometry();
@@ -175,10 +199,11 @@ export function terrainMeshes() {
   const { cell: s, ox, oz, cols, rows, kind, top, surface } = grid;
   const solid = quads(), water = quads(), c = new THREE.Color();
   const topAt = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows ? 0 : top[j * cols + i]);
+  grid.topVert = new Int32Array(cols * rows);
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const k = j * cols + i, t = PALETTE[kind[k]], x0 = ox + i * s, z0 = oz + j * s, y = top[k];
-      solid.add([x0, y, z0], [0, 0, s], [s, 0, 0], c.copy(j % 2 ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05)));
+      grid.topVert[k] = solid.add([x0, y, z0], [0, 0, s], [s, 0, 0], c.copy(j % 2 ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05)));
       c.copy(t.side).multiplyScalar(jitter(k, 2, 0.04));
       const lower = (di, dj) => Math.max(0, y - topAt(i + di, j + dj));   // how far a neighbour lies below this top
       const dE = lower(1, 0), dW = lower(-1, 0), dS = lower(0, 1), dN = lower(0, -1);
@@ -197,7 +222,8 @@ export function terrainMeshes() {
 
   const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
   const waterMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, transparent: true, opacity: WATER.opacity, depthWrite: false });
-  const ground = new THREE.Mesh(solid.geometry(), solidMat); ground.castShadow = true; ground.receiveShadow = true;
+  const geometry = solid.geometry(); grid.colors = geometry.getAttribute('color');
+  const ground = new THREE.Mesh(geometry, solidMat); ground.castShadow = true; ground.receiveShadow = true;
   const pond = new THREE.Mesh(water.geometry(), waterMat);
   const group = new THREE.Group(); group.add(ground, pond);
   return { group, solid: ground, mats: [solidMat, waterMat] };
