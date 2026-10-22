@@ -8,6 +8,7 @@ import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt,
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
 import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
+import SET from '../settings.js';
 import { makeChicken, makeEgg } from './chickens.js';
 
 /* ───────────── helpers ───────────── */
@@ -93,9 +94,9 @@ const SCENERY = {
 const CANOPY = new THREE.Vector3(3.25, 3.4 * TREE_SCALE, -2.05);
 const SAVE_KEY = 'yaga-pet-v1';
 const DOCK_H = 100;                       // px at the bottom of the screen taken by the hotbar
-const FLOCK = 4;                          // the hens she keeps
-const DAY_LEN = 300;                      // seconds per in-game day (24h)
-const DAWN = 6 / 24, DUSK = 20 / 24;      // night runs 20:00 → 06:00
+const FLOCK = SET.hens.flock;             // the hens she keeps
+const DAY_LEN = SET.day.length;           // seconds per in-game day (24h)
+const DAWN = SET.day.nightEnds / 24, DUSK = SET.day.nightStarts / 24;   // night runs 20:00 → 06:00
 const dayRaw = () => ((Date.now() / 1000) % DAY_LEN + DAY_LEN) % DAY_LEN;
 const dayFrac = () => (((dayRaw() + (S.dayOff || 0)) % DAY_LEN) + DAY_LEN) % DAY_LEN / DAY_LEN;
 const isNightAt = (f) => f >= DUSK || f < DAWN;
@@ -114,9 +115,9 @@ const FACES = {
 // Hops become short walks; moods and moments pick one of her 31 animations.
 const YAGA_H = 2.1;                       // her height in world units
 const MODEL_H = 0.98;                     // model units, feet to hair
-const WALK_PACE = 1.3;                      // she strolls 30% quicker than the walk clip
+const WALK_PACE = SET.her.walkPace;         // she strolls 30% quicker than the walk clip
 const WALK_SPEED = 0.562 * WALK_PACE * YAGA_H / MODEL_H;   // ground covered by the walk cycle, so feet don't slide
-const RUN_PACE = 0.8;                       // the run clip is a sprint; she jogs at 80% of it
+const RUN_PACE = SET.her.runPace;           // the run clip is a sprint; she jogs at 80% of it
 const RUN_SPEED = 2.05 * RUN_PACE * YAGA_H / MODEL_H;
 const BORED_AFTER = 20;                    // seconds without input before she gets visibly bored
 const BORED_CLIPS = ['standing_relax', 'look_around', 'wait'];
@@ -782,9 +783,9 @@ function loadSave() {
     S.flock = clamp(d.flock ?? FLOCK, 0, FLOCK);
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
     S.away = away;
-    S.hunger = clamp((S.hunger ?? 0.5) + away / (3 * 3600), 0, 0.95);
-    S.energy = clamp((S.energy ?? 0.8) + away / 1200, 0, 1);   // she rests while you're away
-    S.mana = clamp(S.mana + away / 300, 0, 1);
+    S.hunger = clamp((S.hunger ?? 0.5) + away / SET.her.awayHunger, 0, 0.95);
+    S.energy = clamp((S.energy ?? 0.8) + away / SET.her.awayStamina, 0, 1);   // she rests while you're away
+    S.mana = clamp(S.mana + away / SET.her.awayMana, 0, 1);
     S.joy = clamp(S.joy ?? 0.5, 0, 1);
     S.health = clamp((S.health ?? 0.9) - S.poops.length * Math.min(away, 3600) / 36000, 0.15, 1);
     if (!FOODS.includes(S.crave)) S.crave = null;
@@ -1276,7 +1277,7 @@ function clearOfItems(x, z, gap = 1.3) {
   return ![...world.items, ...world.poops].some((it) => Math.hypot(x - it.root.position.x, z - it.root.position.z) < gap)
     && Math.hypot(x - pet.pos.x, z - pet.pos.z) > BODY_R + 0.5;
 }
-const BUG_MAX = 6;
+const BUG_MAX = SET.bugs.most;
 /** The bugs she can hunt and eat: hostile ones are enemies, not food. */
 function aliveBugs(kind) { return world.items.filter((i) => i.bug && !i.hostile && (!kind || i.kind === kind)); }
 function spawnKind() {
@@ -1296,7 +1297,7 @@ function spawnSprout(instant = false, kind = null) {
     const it = cloneProp(kind || spawnKind());
     it.given = false;
     it.root.position.set(x, groundY(x, z) + (instant ? 0 : -0.3), z); it.root.rotation.y = cross ? (side < 0 ? Math.PI / 2 : -Math.PI / 2) : rand(0, Math.PI * 2);
-    if (it.bug) { startWalk(it, cross ? -side : null); it.life = rand(60, 120); }
+    if (it.bug) { startWalk(it, cross ? -side : null); it.life = rand(...SET.bugs.stayFor); }
     it.s0 *= rand(0.9, 1.15); it.grow = instant ? 1 : 0; it.root.scale.setScalar(instant ? it.s0 : 0.001);
     scene.add(it.root); world.items.push(it);
     return it;
@@ -1358,8 +1359,8 @@ function vanish(it, delay = 0, lift = 1.1) {
 }
 // bugs walk the clearing: each kind its own pace, each bug a bit faster or slower than its kind.
 // All of them stay well under the box's full chase (~2.8 units/s), even when they bolt.
-const BUG_SPEED = Object.fromEntries(Object.entries({ snail: 0.22, caterpillar: 0.4, ladybug: 0.75, firefly: 0.85, beetle: 1.0, ant: 1.45 }).map(([k, v]) => [k, v * BUG_SIZE]));   // smaller bugs, shorter strides
-const BUG_BOLT = 2.0, BUG_FEAR = 2.6;
+const BUG_SPEED = Object.fromEntries(Object.entries(SET.bugs.speed).map(([k, v]) => [k, v * BUG_SIZE]));   // smaller bugs, shorter strides
+const BUG_BOLT = SET.bugs.boltSpeed, BUG_FEAR = SET.bugs.fearRange;
 function bugTarget(it, exit = null) {
   const A = area || ROAM, p = it.root.position;
   for (let i = 0; i < 30; i++) {
@@ -1372,14 +1373,14 @@ function bugTarget(it, exit = null) {
   return new THREE.Vector3(p.x, 0, p.z);
 }
 /* ───────────── hostile bugs: the ones that bite ───────────── */
-const HOSTILE = { kinds: ['beetle', 'ant'], hp: 2, size: 1.5, speed: 1.25, reach: BODY_R + 0.15, bite: 0.04, biteEvery: 1.8, henReach: 0.5, biteHen: 0.2, herRange: 2.2 };
+const HOSTILE = { ...SET.hostile, reach: BODY_R + 0.15 };
 const hostileBugs = () => world.items.filter((i) => i.hostile);
 const FOE_RED = new THREE.Color(0xB32A1F);
 /** A bug that crawls out of the dirt, bigger and red-glowing, and goes straight for her. */
 function spawnHostile(kind = pick(HOSTILE.kinds)) {
   const it = spawnSprout(false, kind);
   if (!it) return null;
-  Object.assign(it, { hostile: true, hp: HOSTILE.hp, biteAt: 1, life: rand(45, 75), stun: 0, flash: 0, glow: [] });
+  Object.assign(it, { hostile: true, hp: HOSTILE.hp, biteAt: 1, life: rand(...HOSTILE.stayFor), stun: 0, flash: 0, glow: [] });
   it.s0 *= HOSTILE.size; it.walk.base = HOSTILE.speed; it.walk.exit = null;
   it.root.traverse((o) => {                             // its own materials, so the red glow stays on this bug
     if (!o.isMesh || !o.material.emissive) return;
@@ -1448,11 +1449,11 @@ function hurtYaga(dmg) {
 }
 /** At zero health she collapses for a while; the biters give up and crawl off. */
 function faint() {
-  world.faintUntil = clock.t + 8;
+  world.faintUntil = clock.t + HOSTILE.faintFor;
   hostileBugs().forEach(sendOff);
   if (brain.food) brain.food.claimed = false;
   brain.food = brain.foe = null; brain.cleanQ.length = 0;
-  brain.mode = 'nap'; brain.napUntil = clock.t + 8; S.health = 0.25;
+  brain.mode = 'nap'; brain.napUntil = clock.t + HOSTILE.faintFor; S.health = HOSTILE.faintHealth;
   pet.play('fall', 3); say('faint', { force: true });
 }
 
@@ -1476,20 +1477,20 @@ function startAttack(f) {
 function strike(f) {
   const p = f.root.position, dx = p.x - pet.pos.x, dz = p.z - pet.pos.z, d = Math.hypot(dx, dz) || 1e-3;
   if (d > SWING.reach + 0.3) return;                     // it got away
-  f.hp -= SWING.dmg; f.stun = 0.6; f.flash = 0.12; Sound.hit();
+  f.hp -= SWING.dmg; f.stun = HOSTILE.stun; f.flash = 0.12; Sound.hit();
   const s = resolveSpot(p.x + (dx / d) * 0.45, p.z + (dz / d) * 0.45); p.x = s.x; p.z = s.z;
   if (f.hp <= 0) killFoe(f);
 }
 function killFoe(f) {
   const s = screenOf(f.root.position.clone().setY(f.root.position.y + 0.3));
   vanish(f, 0, 0.5); sparkle(s.x, s.y); Sound.squeak(); Sound.poof();
-  S.mana = clamp(S.mana + 0.12, 0, 1); say('foeDown', { cool: 5 });
+  S.mana = clamp(S.mana + HOSTILE.killMana, 0, 1); say('foeDown', { cool: 5 });
 }
 
 /* ───────────── the hens: her flock, wandering in the yard in front of the hut ───────────── */
-const YARD = { x: -3.6, z: 0.4, r: 3.2 };
-const HEN = { speed: 0.7, run: 1.9 };
-const EGG = { every: [100, 160], max: 6 };            // seconds between a hen's eggs; the most eggs lying about
+const YARD = SET.hens.yard;
+const HEN = { speed: SET.hens.speed, run: SET.hens.runSpeed };
+const EGG = { every: SET.hens.eggEvery, max: SET.hens.eggsMost };            // seconds between a hen's eggs; the most eggs lying about
 /** A hen at a random spot in the yard. */
 function addHen(variant) {
   const model = makeChicken(variant), a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * YARD.r;
@@ -1511,7 +1512,7 @@ function henGoal() {
 /** A hen stands about pecking, then strolls somewhere else; if something bit it, it runs from it. */
 function tickHen(h, dt) {
   const p = h.root.position;
-  h.t += dt; h.hurt = Math.max(0, h.hurt - dt); h.hp = Math.min(1, h.hp + dt / 120);    // a bitten hen recovers in a couple of minutes
+  h.t += dt; h.hurt = Math.max(0, h.hurt - dt); h.hp = Math.min(1, h.hp + dt / SET.hens.healIn);    // a bitten hen recovers in a couple of minutes
   let speed = 0, peck = 0;
   h.eggAt -= dt;
   if (h.flee > 0) {
@@ -1579,7 +1580,7 @@ function tapEgg(egg) {
 }
 /** A harvest feeds the flock: the hens heal and lay sooner. */
 function feedFlock() {
-  for (const h of world.hens) { h.hp = Math.min(1, h.hp + 0.5); h.eggAt = Math.min(h.eggAt, 30); sparkleAt(h.root.position.x, h.root.position.z); }
+  for (const h of world.hens) { h.hp = Math.min(1, h.hp + SET.hens.feedHeals); h.eggAt = Math.min(h.eggAt, SET.hens.feedLaysWithin); sparkleAt(h.root.position.x, h.root.position.z); }
 }
 
 /* ───────────── the farm: the shovel digs farmland ───────────── */
@@ -1688,13 +1689,13 @@ function finishFarm(F) {
   if (F.act === 'plant') { plot.crop = F.crop; plot.at = Date.now(); showCrop(plot); say('planted', { force: true }); }
   if (F.act === 'harvest') {                              // the crop is food: she eats her harvest
     plot.crop = null; plot.at = 0; showCrop(plot); sparkleAt(F.x, F.z); Sound.yum();
-    S.hunger = clamp(S.hunger - 0.3, 0, 1); S.joy = clamp(S.joy + 0.06, 0, 1); S.health = clamp(S.health + 0.05, 0, 1);
+    feed(SET.food.harvest);
     feedFlock(); say('harvest', { force: true });
   }
   if (F.act === 'egg') {                                  // an egg is food too
     scene.remove(F.egg.root); world.eggs = world.eggs.filter((e) => e !== F.egg);
     sparkleAt(F.x, F.z); Sound.yum();
-    S.hunger = clamp(S.hunger - 0.18, 0, 1); S.joy = clamp(S.joy + 0.05, 0, 1); S.health = clamp(S.health + 0.03, 0, 1);
+    feed(SET.food.egg);
     say('egg', { force: true });
   }
   if (F.act === 'grow') { plot.at = Date.now() - GROW.ripe * 1000; showCrop(plot); sparkleAt(F.x, F.z); Sound.chime(); say('grown', { force: true }); }
@@ -1763,12 +1764,12 @@ function tickProps(dt) {
     if (world.spawnAt <= 0) {
       if (aliveBugs().length >= BUG_MAX) recycleFarBug();
       if (aliveBugs().length < BUG_MAX) spawnSprout();
-      world.spawnAt = rand(5, 11);
+      world.spawnAt = rand(...SET.bugs.appearEvery);
     }
     world.foeAt -= dt;
     if (world.foeAt <= 0) {                                   // the biting kind: one or two by day, up to three at night
-      if (hostileBugs().length < (S.night ? 3 : 1)) spawnHostile();
-      world.foeAt = S.night ? rand(10, 18) : rand(35, 60);
+      if (hostileBugs().length < (S.night ? HOSTILE.mostByNight : HOSTILE.mostByDay)) spawnHostile();
+      world.foeAt = rand(...(S.night ? HOSTILE.nightEvery : HOSTILE.dayEvery));
     }
   }
   for (const it of [...world.items, ...world.poops]) {
@@ -1908,19 +1909,19 @@ function doPoop() {
 }
 
 function tickBrain(dt) {
-  const t = clock.t, w = pet.want, it = brain.food;
+  const t = clock.t, w = pet.want, it = brain.food, HER = SET.her;
   // ── needs drift ──
   const awake = brain.mode !== 'sleep' && brain.mode !== 'nap';
-  S.hunger = clamp(S.hunger + dt / (awake ? 480 : 1500), 0, 1);
+  S.hunger = clamp(S.hunger + dt / (awake ? HER.hungerAwake : HER.hungerAsleep), 0, 1);
   const resting = brain.mode === 'idle' && !pet.airborne;      // stamina comes back when she stands still, and fast in a nap
-  if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / 75, 0, 1);
-  else S.energy = clamp(S.energy - dt / 700 + (resting ? dt / 90 : 0), 0, 1);
-  S.mana = clamp(S.mana + dt / 150, 0, 1);
-  S.joy = clamp(S.joy - dt / (awake ? 420 : 1800) - (world.poops.length > 1 ? dt / 400 : 0), 0, 1);   // full → empty in ~7 min if ignored
+  if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / HER.staminaNap, 0, 1);
+  else S.energy = clamp(S.energy - dt / HER.staminaDrain + (resting ? dt / HER.staminaRest : 0), 0, 1);
+  S.mana = clamp(S.mana + dt / HER.manaRegain, 0, 1);
+  S.joy = clamp(S.joy - dt / (awake ? HER.joyAwake : HER.joyAsleep) - (world.poops.length > 1 ? dt / HER.joyDirty : 0), 0, 1);   // full → empty in ~7 min if ignored
   const dirt = world.poops.length;
-  S.health = clamp(S.health - dirt * dt / (awake ? 300 : 900) - (S.hunger > 0.85 ? dt / 600 : 0) + (dirt === 0 && S.hunger < 0.7 ? dt / 200 : 0), 0, 1);
-  if (!S.crave && S.hunger > 0.55) { S.crave = pick(FOODS.filter((f) => f !== S.lastCrave)); refreshUI(); say('crave_' + S.crave, { cool: 4 }); }
-  if (S.crave && S.hunger < 0.25) { S.crave = null; refreshUI(); }
+  S.health = clamp(S.health - dirt * dt / (awake ? HER.healthDirtAwake : HER.healthDirtAsleep) - (S.hunger > 0.85 ? dt / HER.healthStarving : 0) + (dirt === 0 && S.hunger < 0.7 ? dt / HER.healthRecover : 0), 0, 1);
+  if (!S.crave && S.hunger > HER.cravesAbove) { S.crave = pick(FOODS.filter((f) => f !== S.lastCrave)); refreshUI(); say('crave_' + S.crave, { cool: 4 }); }
+  if (S.crave && S.hunger < HER.cravingEndsBelow) { S.crave = null; refreshUI(); }
 
   if (brain.mode === 'nap' && t > brain.napUntil) { brain.mode = 'idle'; brain.until = 1; pet.st.puffV += 5; }
 
@@ -2188,11 +2189,15 @@ function fetchFood(it, urgent = true) {
   go(it.root.position.clone(), 'food', urgent);
 }
 
+/** A meal: takes the hunger off and adds the joy and health (the `food` numbers in settings.js). */
+function feed(g) {
+  S.hunger = clamp(S.hunger - g.hunger, 0, 1); S.joy = clamp(S.joy + g.joy, 0, 1); S.health = clamp(S.health + (g.health || 0), 0, 1);
+}
+
 function eaten(it) {
   S.eaten[it.kind] = (S.eaten[it.kind] || 0) + 1;
   const match = S.crave === it.kind;
-  S.hunger = clamp(S.hunger - (match ? 0.55 : 0.3), 0, 1);
-  S.joy = clamp(S.joy + (match ? 0.08 : 0.02), 0, 1);   // food fixes hunger; happiness comes from attention
+  feed(match ? SET.food.craved : SET.food.other);   // food fixes hunger; happiness comes from attention
   if (match) { S.lastCrave = S.crave; S.crave = null; brain.celebrate = 1; }
   S.meals++;
   setTimeout(() => boxReact('eat', 0.5), 700);
@@ -2519,7 +2524,7 @@ function onMove(e) {
   touchAt(hp, vx, vy);
   if (ptr.moved > 14) {                    // stroking the fur
     brain.contentUntil = clock.t + 0.7;
-    S.joy = clamp(S.joy + 0.006, 0, 1);
+    S.joy = clamp(S.joy + SET.her.strokeJoy, 0, 1);
     if (now - ptr.heartAt > 380) { ptr.heartAt = now; heart(e.clientX, e.clientY); }
     if (now - ptr.purrAt > 300) { ptr.purrAt = now; Sound.purr(); }
     say('pet', { cool: 10 });
@@ -2581,8 +2586,8 @@ function cleanPoop(p, quiet = false) {
   vanish(p, 0, 0.8);
   sparkle(sp.x, sp.y);
   if (!quiet) { Sound.poof(); say('clean', { force: true, cool: 2 }); }
-  S.joy = clamp(S.joy + 0.08, 0, 1);
-  S.health = clamp(S.health + 0.15, 0, 1);
+  S.joy = clamp(S.joy + SET.her.cleanJoy, 0, 1);
+  S.health = clamp(S.health + SET.her.cleanHealth, 0, 1);
   pet.st.puffV += 3;
   brain.glance.copy(p.root.position); brain.glanceUntil = clock.t + 0.8;
   refreshUI(); save();
