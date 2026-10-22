@@ -18,7 +18,8 @@ function track(url, bytes) {
   return f;
 }
 function finish(f) { f.done = true; finished.push(f.name); redraw(); }
-function redraw() { if (!queued) { queued = true; requestAnimationFrame(draw); } }
+// timers, not requestAnimationFrame: rAF can stall in an embedded or hidden frame, and then loading would never finish
+function redraw() { if (!queued) { queued = true; setTimeout(draw, 50); } }
 
 function draw() {
   queued = false;
@@ -61,8 +62,8 @@ export async function loadGLB(loader, url, mbSize) {
 /** The last step: shows "Building her world…" and resolves once that is on screen, before the heavy setup starts. */
 export function building() {
   now.textContent = 'Building her world…'; size.textContent = '';
-  return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
+  return new Promise((resolve) => setTimeout(resolve, 50));     // a moment free for the browser to paint it
 }
 
-/** Fades the loading screen out. */
+/** Fades the loading screen out (frame() in app.js calls it once her first frame has been drawn). */
 export function hide() { el.classList.add('gone'); }

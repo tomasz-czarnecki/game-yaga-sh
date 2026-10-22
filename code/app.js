@@ -908,7 +908,6 @@ async function boot() {
 
   window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
-  requestAnimationFrame(() => requestAnimationFrame(hide));   // fade the loading screen once her first frame is on screen
   setInterval(save, 4000);
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {
@@ -2866,7 +2865,7 @@ function tickClock() {
   clockEl.root.setAttribute('aria-label', fill(UI.clockAria, { time: `${hh}:${mm}`, phase: S.night ? UI.night : UI.day, next: nx }));
 }
 /* ───────────── loop ───────────── */
-let last = performance.now(), lastTick = 0;
+let last = performance.now(), lastTick = 0, drawnOnce = false;
 function simulate(dt) {
   clock.t += dt; phase.cycleT += dt;
   phase.n = ease(phase.n, S.night ? 1 : 0, 1.4, dt);
@@ -2902,6 +2901,7 @@ function frame() {
   tickTalk(clock.t);
   tickBoxTalk(clock.t);
   renderer.render(scene, camera);
+  if (!drawnOnce) { drawnOnce = true; hide(); }   // her first frame is drawn: fade the loading screen
 }
 function start() {
   const loop = () => { requestAnimationFrame(loop); frame(); };
