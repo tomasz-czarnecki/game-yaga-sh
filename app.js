@@ -88,7 +88,8 @@ const FACES = {
 // Hops become short walks; moods and moments pick one of her 31 animations.
 const YAGA_H = 2.1;                       // her height in world units
 const MODEL_H = 0.98;                     // model units, feet to hair
-const WALK_SPEED = 0.562 * YAGA_H / MODEL_H;   // ground covered by the walk cycle, so feet don't slide
+const WALK_PACE = 1.3;                      // she strolls 30% quicker than the walk clip
+const WALK_SPEED = 0.562 * WALK_PACE * YAGA_H / MODEL_H;   // ground covered by the walk cycle, so feet don't slide
 const RUN_PACE = 0.8;                       // the run clip is a sprint; she jogs at 80% of it
 const RUN_SPEED = 2.05 * RUN_PACE * YAGA_H / MODEL_H;
 const BORED_AFTER = 20;                    // seconds without input before she gets visibly bored
@@ -157,7 +158,7 @@ class YagaPet {
     if (name === this.clipName) return;
     const clip = this.clips[name] || this.clips.idle;
     const next = this.mixer.clipAction(clip);
-    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(name === 'run' ? RUN_PACE : 1).fadeIn(FADE).play();
+    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(name === 'run' ? RUN_PACE : name === 'walk' ? WALK_PACE : 1).fadeIn(FADE).play();
     if (this.action) this.action.fadeOut(FADE);
     this.action = next; this.clipName = name;
   }
