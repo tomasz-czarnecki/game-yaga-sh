@@ -11,6 +11,9 @@
     --gold: #D6A446;        /* the homepage gold: counts and alerts */
     --accent: #CF6E42;      /* the homepage terracotta */
     --warn: #DE8053;        /* the homepage highlight: low stats */
+    --hp: #C8442F;          /* health: the red of her hair and the hut's door trim */
+    --mana: #6277D6;        /* mana: a dusk indigo */
+    --stam: #86A24A;        /* stamina: moss, like her skirt */
     --ink: #1A1814;         /* thought-bubble outline, from the website */
     --paper: #FCFBF8;       /* thought-bubble fill, from the website */
     --glass: rgba(28, 26, 23, 0.74);
@@ -30,6 +33,8 @@
   #stage canvas { display: block; touch-action: none; }
   .vignette { position: fixed; inset: 0; pointer-events: none; }
   .vignette { background: radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 40%, rgba(4,3,8,0.55) 100%); }
+  .vignette.hurt { animation: hurt 0.5s ease-out; }                    /* the screen edge flashes red when she is bitten */
+  @keyframes hurt { from { box-shadow: inset 0 0 140px 30px rgba(200, 40, 30, 0.55); } to { box-shadow: inset 0 0 140px 30px rgba(200, 40, 30, 0); } }
 
   /* left column: stats, then the actions under them (bugs 3×2, poo beside) */
   .side {
@@ -162,6 +167,35 @@
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
   .home:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .home .txt { margin-left: 8px; }
+  @media (max-width: 700px) { .home { width: 36px; padding: 0; justify-content: center; } .home .txt { display: none; } }   /* just the arrow, so the hotbar has room */
+
+  /* bottom hotbar, like an RPG: health, mana and stamina, and the two tools she can hold */
+  .hotbar {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 22px;
+    background: var(--glass); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .vitals { display: grid; gap: 8px; width: clamp(112px, 28vw, 190px); pointer-events: none; }
+  .vital { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: 8px; }
+  .vital.hp { --c: var(--hp); } .vital.mana { --c: var(--mana); } .vital.stam { --c: var(--stam); }
+  .vital svg { width: 16px; height: 16px; display: block; fill: var(--c); }
+  .vital .bar { height: 10px; border-radius: 999px; background: rgba(240, 234, 220, 0.12); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+  .vital .bar i { display: block; height: 100%; width: 50%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 62%, #000), var(--c)); transition: width 0.25s ease; }
+  .vital.low .bar i { animation: lowpulse 1.1s ease-in-out infinite; }
+  .tools { display: flex; gap: 8px; }
+  .tool {
+    position: relative; flex: none; width: var(--btn); height: var(--btn); padding: 0; border-radius: 16px;
+    border: 1px solid var(--line); background: rgba(240, 234, 220, 0.09); color: var(--cream);
+    cursor: pointer; display: grid; place-items: center; transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  .tool svg { width: 58%; height: 58%; display: block; fill: currentColor; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .tool kbd { position: absolute; left: 6px; top: 4px; font: 500 10px/1 var(--mono); color: rgba(240, 234, 220, 0.55); pointer-events: none; }
+  .tool:active { transform: scale(0.92); }
+  .tool:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .tool[aria-checked="true"] { border-color: var(--gold); background: rgba(214, 164, 70, 0.2); color: var(--gold); transform: translateY(-3px); }
+  .tool[aria-checked="true"] kbd { color: var(--gold); }
 
   /* the black box talks in ink: its cloud is the negative of hers */
   #saybox .cl { background: var(--ink); color: var(--cream); border-color: var(--cream); box-shadow: 3px 3px 0 rgba(0,0,0,0.6); }
@@ -210,7 +244,6 @@
 <img class="portrait" src="assets/yaga-face.png" alt="Pani Yaga" width="256" height="256">
 <section class="stats" aria-label="How it's doing">
   <div class="stat" id="statHunger" role="meter" aria-label="Hunger: how full it is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Hunger</span><span class="bar"><i></i></span><span class="val">fed</span></div>
-  <div class="stat" id="statHealth" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="90"><span class="lbl">Health</span><span class="bar"><i></i></span><span class="val">healthy</span></div>
   <div class="stat" id="statJoy" role="meter" aria-label="Happiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Happiness</span><span class="bar"><i></i></span><span class="val">fine</span></div>
 </section>
 </div>
@@ -230,7 +263,21 @@
 </div>
 </div>
 
-<a class="home" href="https://yaga.sh/">← YagaLabs</a>
+<div class="hotbar" id="hotbar" role="group" aria-label="Health, mana, stamina and tools">
+  <div class="vitals">
+    <div class="vital hp" id="vitalHealth" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="90"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.4c0 5.5-7.5 10.1-7.5 10.1Z"/></svg><span class="bar"><i></i></span></div>
+    <div class="vital mana" id="vitalMana" role="meter" aria-label="Mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.6 4.3 6 7.1 6 10.4a6 6 0 0 1-12 0C6 10.1 8.4 7.3 12 3Z"/></svg><span class="bar"><i></i></span></div>
+    <div class="vital stam" id="vitalStamina" role="meter" aria-label="Stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="85"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2.5 5.5 13.5H11l-1 8 8-11.5h-5.5Z"/></svg><span class="bar"><i></i></span></div>
+  </div>
+  <div class="tools" role="radiogroup" aria-label="Tool in her hand">
+    <button class="tool" data-tool="broom" role="radio" aria-checked="true" aria-label="Broomstick (key 1)"><kbd>1</kbd>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(45 12 12)"><path d="M12 2v10" fill="none"/><path d="M10.4 12h3.2l3 9.5H7.4Z"/></g></svg></button>
+    <button class="tool" data-tool="shovel" role="radio" aria-checked="false" aria-label="Shovel (key 2)"><kbd>2</kbd>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(45 12 12)"><path d="M12 3.5V13M9 3.5h6" fill="none"/><path d="M12 13c-3 0-4.5 2.5-3.5 6L12 22.5 15.5 19c1-3.5-.5-6-3.5-6Z"/></g></svg></button>
+  </div>
+</div>
+
+<a class="home" href="https://yaga.sh/" aria-label="Back to Yaga Labs"><span class="arrow">←</span><span class="txt">YagaLabs</span></a>
 
 <div id="loading" role="status" aria-label="Waking Pani Yaga"><div class="box"></div></div>
 

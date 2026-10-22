@@ -6,6 +6,7 @@ import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
 import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
+import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -68,6 +69,7 @@ const SCENERY = {
 };
 const CANOPY = new THREE.Vector3(3.25, 3.4 * TREE_SCALE, -2.05);
 const SAVE_KEY = 'yaga-pet-v1';
+const DOCK_H = 100;                       // px at the bottom of the screen taken by the hotbar
 const DAY_LEN = 300;                      // seconds per in-game day (24h)
 const DAWN = 6 / 24, DUSK = 20 / 24;      // night runs 20:00 → 06:00
 const dayRaw = () => ((Date.now() / 1000) % DAY_LEN + DAY_LEN) % DAY_LEN;
@@ -111,10 +113,15 @@ class YagaPet {
       // a soft self-light from her own texture, so she reads in the dark violet clearing
       o.material.emissiveMap = o.material.map; o.material.emissive = new THREE.Color(0xffffff);
       this.mats.push(o.material);
+      if (o.material.name === BROOM_MATERIAL) this.broom = o;
     });
+    const shovel = makeShovel(); this.shovel = shovel.group; this.mats.push(...shovel.mats);
+    attachInHand(model, this.shovel);
+    this.holds(S.tool);
 
     this.mixer = new THREE.AnimationMixer(model);
     this.clips = Object.fromEntries(gltf.animations.map((c) => [c.name.replace(/\.\d+$/, ''), c]));
+    this.clips.swing = this.clips[SWING.clip];      // the broom swing's real name is a long text prompt
     this.action = null; this.clipName = null; this.oneShot = null; this.lastWalk = -9;
     this.gait = 'walk';                             // kept through the brain's tiny gaps between hops
 
@@ -137,6 +144,9 @@ class YagaPet {
   get pos() { return this.root.position; }
   get airborne() { return !!this.hop; }
 
+  /** Shows the tool in her hand: the broom is part of her model, the shovel is a prop. */
+  holds(tool) { this.broom.visible = tool === 'broom'; this.shovel.visible = tool === 'shovel'; }
+
   /** The brain's "hop": a short walk to (x, z). A big hop on the spot is a little celebration. */
   startHop(x, z, o = {}) {
     const from = this.root.position.clone();
@@ -151,15 +161,17 @@ class YagaPet {
     this.faceTo = Math.atan2(x - from.x, z - from.z);
   }
 
-  /** Plays one animation for `secs`, then she goes back to whatever her mood picks. */
-  play(name, secs) { this.oneShot = { name, until: clock.t + secs }; this.setClip(name); }
+  /** Plays one animation for `secs`, then she goes back to whatever her mood picks. `restart` replays it from the start. */
+  play(name, secs, restart = false) { this.oneShot = { name, until: clock.t + secs }; this.setClip(name, restart); }
+  /** One broom swing. */
+  swing() { this.play('swing', SWING.dur, true); }
 
-  setClip(name) {
-    if (name === this.clipName) return;
+  setClip(name, restart = false) {
+    if (name === this.clipName && !restart) return;
     const clip = this.clips[name] || this.clips.idle;
     const next = this.mixer.clipAction(clip);
-    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(name === 'run' ? RUN_PACE : name === 'walk' ? WALK_PACE : 1).fadeIn(FADE).play();
-    if (this.action) this.action.fadeOut(FADE);
+    next.reset().setEffectiveWeight(1).setEffectiveTimeScale(name === 'run' ? RUN_PACE : name === 'walk' ? WALK_PACE : 1).fadeIn(restart ? 0.08 : FADE).play();
+    if (this.action && this.action !== next) this.action.fadeOut(FADE);
     this.action = next; this.clipName = name;
   }
 
@@ -715,11 +727,15 @@ const Sound = {
   wake() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.26, 0.06, 'sine', i * 0.07)); },
   night() { [659, 523, 392].forEach((f, i) => this.tone(f, f, 0.4, 0.05, 'sine', i * 0.12)); },
   babble() { const f = rand(330, 640); this.tone(f, f * rand(0.8, 1.3), 0.06, 0.035, 'triangle'); },
+  equip() { this.tone(520, 760, 0.06, 0.06, 'square'); this.noise(0.05, 0.05, 2400, 2); },
+  hurt() { this.tone(230, 90, 0.2, 0.12, 'sawtooth'); this.noise(0.1, 0.07, 500, 1); },
+  swing() { this.noise(0.2, 0.1, 1300, 1, 0, 1800); },
+  hit() { this.tone(190, 60, 0.12, 0.16, 'square'); this.noise(0.06, 0.1, 900, 1); },
 };
 
 /* ───────────── saved state ───────────── */
 const S = {
-  hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, night: false, dayOff: null,
+  hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
   eaten: Object.fromEntries(FOODS.map((f) => [f, 0])), meals: 0, crave: null, lastCrave: null,
   poops: [], sound: true, away: -1,
 };
@@ -733,13 +749,14 @@ function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
     const d = JSON.parse(raw);
-    Object.assign(S, { hunger: d.hunger, energy: d.energy, joy: d.joy, health: d.health, dayOff: d.dayOff ?? null, night: !!d.night, meals: d.meals | 0, crave: d.crave || null, sound: d.sound !== false });
+    Object.assign(S, { hunger: d.hunger, energy: d.energy, joy: d.joy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, meals: d.meals | 0, crave: d.crave || null, sound: d.sound !== false });
     if (d.eaten) Object.assign(S.eaten, d.eaten);
     S.poops = Array.isArray(d.poops) ? d.poops.slice(0, 5) : [];
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
     S.away = away;
     S.hunger = clamp((S.hunger ?? 0.5) + away / (3 * 3600), 0, 0.95);
     S.energy = clamp((S.energy ?? 0.8) + away / 1200, 0, 1);   // she rests while you're away
+    S.mana = clamp(S.mana + away / 300, 0, 1);
     S.joy = clamp(S.joy ?? 0.5, 0, 1);
     S.health = clamp((S.health ?? 0.9) - S.poops.length * Math.min(away, 3600) / 36000, 0.15, 1);
     if (!FOODS.includes(S.crave)) S.crave = null;
@@ -748,14 +765,14 @@ function loadSave() {
 function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
+      hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
       eaten: S.eaten, poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
     }));
   } catch (e) { /* ignore */ }
 }
 
 /* ───────────── world ───────────── */
-const world = { items: [], poops: [], vanishing: [], falling: [], clods: [] };
+const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], faintUntil: 0 };
 let renderer, scene, camera, viewCam, pet, iconKit, area, view;
 // Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
 // Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
@@ -839,13 +856,13 @@ async function boot() {
 
   for (const p of S.poops) spawnPoop(p.x, p.z, true);
   phase.n = S.night ? 1 : 0; applyPhase(phase.n);
-  world.spawnAt = rand(4, 8);
+  world.spawnAt = rand(4, 8); world.foeAt = rand(8, 14);
   for (let i = 0; i < 4; i++) spawnSprout(true);
   refreshUI();
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
   $('#loading').classList.add('gone');
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
+  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
@@ -1123,7 +1140,7 @@ function computeArea() {
 function computeView() {
   viewCam.aspect = camera.aspect; placeCamera(viewCam, rigAt(0, camera.aspect), aim, aim);
   const v = new THREE.Vector3(), W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight;
-  const yMin = -1 + 2 * 28 / H;                          // feet stay clear of the bottom edge (the actions now live top-left)
+  const yMin = -1 + 2 * DOCK_H / H;                      // feet stay clear of the hotbar at the bottom
   const fits = (x, z) => {
     for (const sx of [-BODY_R, BODY_R]) for (const sz of [-0.3, 0.3]) {
       v.set(x + sx, 0.04, z + sz).project(viewCam);
@@ -1229,7 +1246,8 @@ function clearOfItems(x, z, gap = 1.3) {
     && Math.hypot(x - pet.pos.x, z - pet.pos.z) > BODY_R + 0.5;
 }
 const BUG_MAX = 6;
-function aliveBugs(kind) { return world.items.filter((i) => i.bug && (!kind || i.kind === kind)); }
+/** The bugs she can hunt and eat: hostile ones are enemies, not food. */
+function aliveBugs(kind) { return world.items.filter((i) => i.bug && !i.hostile && (!kind || i.kind === kind)); }
 function spawnKind() {
   if (S.crave && !aliveBugs(S.crave).length && Math.random() < 0.6) return S.crave;
   const n = (k) => aliveBugs(k).length, min = Math.min(...FOODS.map(n));
@@ -1322,6 +1340,89 @@ function bugTarget(it, exit = null) {
   }
   return new THREE.Vector3(p.x, 0, p.z);
 }
+/* ───────────── hostile bugs: the ones that bite ───────────── */
+const HOSTILE = { kinds: ['beetle', 'ant'], hp: 2, size: 1.5, speed: 1.25, reach: BODY_R + 0.15, bite: 0.04, biteEvery: 1.8 };
+const hostileBugs = () => world.items.filter((i) => i.hostile);
+const FOE_RED = new THREE.Color(0xB32A1F);
+/** A bug that crawls out of the dirt, bigger and red-glowing, and goes straight for her. */
+function spawnHostile(kind = pick(HOSTILE.kinds)) {
+  const it = spawnSprout(false, kind);
+  if (!it) return null;
+  Object.assign(it, { hostile: true, hp: HOSTILE.hp, biteAt: 1, life: rand(45, 75), stun: 0, flash: 0, glow: [] });
+  it.s0 *= HOSTILE.size; it.walk.base = HOSTILE.speed; it.walk.exit = null;
+  it.root.traverse((o) => {                             // its own materials, so the red glow stays on this bug
+    if (!o.isMesh || !o.material.emissive) return;
+    o.material = o.material.clone(); o.material.emissive = FOE_RED.clone(); o.material.emissiveIntensity = 0.6;
+    it.glow.push(o.material);
+  });
+  say('foe', { cool: 25 });
+  return it;
+}
+/** A hostile bug gives up and crawls off the edge of the field. */
+function sendOff(it) {
+  const p = it.root.position, sp = spanAt(p.z);
+  it.hostile = false; it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
+}
+/** A hostile bug next to her bites, every so often. A fresh hit stuns it and flashes it white for a moment. */
+function tickBite(it, dt) {
+  it.stun = Math.max(0, it.stun - dt);
+  if (it.flash > 0) { it.flash -= dt; for (const m of it.glow) m.emissiveIntensity = it.flash > 0 ? 2.2 : 0.6; }
+  it.biteAt -= dt;
+  if (it.biteAt > 0 || it.stun > 0 || clock.t < world.faintUntil || it.state !== 'rest' || it.grow < 1) return;
+  if (Math.hypot(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z) > HOSTILE.reach + 0.1) return;
+  it.biteAt = HOSTILE.biteEvery;
+  hurtYaga(HOSTILE.bite);
+}
+const vignette = $('.vignette');
+/** Something hurt her: health drops, the screen edge flashes red, and she flinches if she is just standing there. */
+function hurtYaga(dmg) {
+  S.health = clamp(S.health - dmg, 0, 1);
+  Sound.hurt(); say('bitten', { cool: 6 });
+  vignette.classList.remove('hurt'); void vignette.offsetWidth; vignette.classList.add('hurt');
+  if (S.health <= 0.001) return faint();
+  if (brain.mode === 'nap') { brain.mode = 'idle'; brain.until = 1; }          // a bite wakes her
+  if (brain.mode === 'idle' && !pet.airborne) pet.play('hit_to_body_01', 0.9);
+}
+/** At zero health she collapses for a while; the biters give up and crawl off. */
+function faint() {
+  world.faintUntil = clock.t + 8;
+  hostileBugs().forEach(sendOff);
+  if (brain.food) brain.food.claimed = false;
+  brain.food = brain.foe = null; brain.cleanQ.length = 0;
+  brain.mode = 'nap'; brain.napUntil = clock.t + 8; S.health = 0.25;
+  pet.play('fall', 3); say('faint', { force: true });
+}
+
+/* ── the broom ── */
+/** Tap on a hostile bug: with the broom she walks up and swats it; with the shovel she says so. */
+function tapFoe(f) {
+  if (S.tool !== 'broom') { say('wrongTool', { cool: 6 }); return; }
+  if (S.energy < SWING.cost) { say('tired', { cool: 5 }); return; }
+  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
+  ring(f.root.position);
+  brain.foe = f; go(f.root.position.clone(), 'attack', true);
+}
+/** One swing at a bug in reach: it costs stamina, and the hit lands a moment into the swing. */
+function startAttack(f) {
+  brain.mode = 'attack'; brain.foe = f; brain.atkT = 0; brain.atkHit = false;
+  S.energy = clamp(S.energy - SWING.cost, 0, 1);
+  pet.faceTo = Math.atan2(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z);
+  pet.swing(); Sound.swing();
+}
+/** The broom lands: damage, a shove away from her, a white flash, and a stun so it cannot bite straight back. */
+function strike(f) {
+  const p = f.root.position, dx = p.x - pet.pos.x, dz = p.z - pet.pos.z, d = Math.hypot(dx, dz) || 1e-3;
+  if (d > SWING.reach + 0.3) return;                     // it got away
+  f.hp -= SWING.dmg; f.stun = 0.6; f.flash = 0.12; Sound.hit();
+  const s = resolveSpot(p.x + (dx / d) * 0.45, p.z + (dz / d) * 0.45); p.x = s.x; p.z = s.z;
+  if (f.hp <= 0) killFoe(f);
+}
+function killFoe(f) {
+  const s = screenOf(f.root.position.clone().setY(f.root.position.y + 0.3));
+  vanish(f, 0, 0.5); sparkle(s.x, s.y); Sound.squeak(); Sound.poof();
+  S.mana = clamp(S.mana + 0.12, 0, 1); say('foeDown', { cool: 5 });
+}
+
 function startWalk(it, exit = null) {
   it.walk = { base: (BUG_SPEED[it.kind] || 0.7) * rand(0.75, 1.3), v: 0, heading: it.root.rotation.y, rest: rand(0.2, 0.9), exit, bt: 0 };
   it.walk.goal = bugTarget(it, exit);
@@ -1333,8 +1434,15 @@ function tickBug(it, dt) {
   if (it.state === 'fall' || eating) a = 1;
   else if (w && live && it.state === 'rest' && it.grow >= 1) {
     const dPet = Math.hypot(p.x - pet.pos.x, p.z - pet.pos.z) || 1e-3;
-    const scared = dPet < BUG_FEAR && !pet.want.asleep && brain.mode !== 'sleep';
-    if (w.rest > 0 && !scared) { w.rest -= dt; w.v = ease(w.v, 0, 8, dt); }
+    const scared = !it.hostile && dPet < BUG_FEAR && !pet.want.asleep && brain.mode !== 'sleep';
+    if (it.hostile) {                                    // always after her, round the pond and cliffs; it stops only to bite
+      if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, pet.pos.x, pet.pos.z); it.pathT = 0.25; }
+      w.rest = dPet < HOSTILE.reach || it.stun > 0 ? 1 : 0;
+    }
+    if (w.rest > 0 && !scared) {
+      w.rest -= dt; w.v = ease(w.v, 0, 8, dt);
+      if (it.hostile) { w.heading += wrap(Math.atan2(pet.pos.x - p.x, pet.pos.z - p.z) - w.heading) * (1 - Math.exp(-10 * dt)); it.root.rotation.y = w.heading; }
+    }
     else {
       w.rest = 0;
       // steer toward the goal, round the tree and rocks, and away from the box when it gets close
@@ -1360,8 +1468,9 @@ function tickBug(it, dt) {
           vanish(it, 0, 0); return;
         }
       } else if (it.life != null && (it.life -= dt) < 0 && !it.claimed) {
+        it.hostile = false;                                  // a hostile bug that has had enough crawls off like the others
         w.exit = p.x < (spanAt(p.z).x0 + spanAt(p.z).x1) / 2 ? -1 : 1; w.goal = bugTarget(it, w.exit);
-      } else if (gd < 0.4 || Math.random() < dt * 0.05) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
+      } else if (!it.hostile && (gd < 0.4 || Math.random() < dt * 0.05)) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
       const k = clamp(w.v / Math.max(w.base, 0.2), 0, 1.8);
       a = 0.35 + 0.65 * Math.min(1, k); adv = dt * (0.5 + 0.7 * k);
     }
@@ -1377,10 +1486,16 @@ function tickProps(dt) {
       if (aliveBugs().length < BUG_MAX) spawnSprout();
       world.spawnAt = rand(5, 11);
     }
+    world.foeAt -= dt;
+    if (world.foeAt <= 0) {                                   // the biting kind: one or two by day, up to three at night
+      if (hostileBugs().length < (S.night ? 3 : 1)) spawnHostile();
+      world.foeAt = S.night ? rand(10, 18) : rand(35, 60);
+    }
   }
   for (const it of [...world.items, ...world.poops]) {
     if (it.mixer) it.mixer.update(dt);
     if (it.bug) tickBug(it, dt);
+    if (it.hostile) tickBite(it, dt);
     if (it.grow < 1) {
       it.grow = Math.min(1, it.grow + dt / 0.7);
       const e = 1 - Math.pow(1 - it.grow, 3);
@@ -1415,6 +1530,7 @@ function tickProps(dt) {
 
 /* ───────────── the brain ───────────── */
 const clock = { t: 0 };
+const BUSY = ['eat', 'poop', 'clean', 'attack'];     // modes she is not interrupted in
 const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, poopAt: null, noticed: null, noticeAt: -9,
   reactUntil: 0, contentUntil: 0, yawnAt: 8, lookAt: null, eatT: 0, celebrate: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
   pokes: [], lastPoke: -99, grinUntil: 0, cleanQ: [], poo: null, cleanT: 0, cleaned: false };
@@ -1448,6 +1564,7 @@ function planHop() {
 function arrive() {
   const pur = brain.purpose;
   if (pur === 'food' && brain.food && world.items.includes(brain.food)) return startEat(brain.food);
+  if (pur === 'attack' && brain.foe && world.items.includes(brain.foe)) return startAttack(brain.foe);
   if (pur === 'clean') {
     brain.mode = 'clean'; brain.cleanT = 0; brain.cleaned = false; brain.cl = null;
     setTimeout(() => boxReact('spell', 0.6), 1200);
@@ -1515,8 +1632,10 @@ function tickBrain(dt) {
   // ── needs drift ──
   const awake = brain.mode !== 'sleep' && brain.mode !== 'nap';
   S.hunger = clamp(S.hunger + dt / (awake ? 480 : 1500), 0, 1);
+  const resting = brain.mode === 'idle' && !pet.airborne;      // stamina comes back when she stands still, and fast in a nap
   if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / 75, 0, 1);
-  else S.energy = clamp(S.energy - dt / 700, 0, 1);
+  else S.energy = clamp(S.energy - dt / 700 + (resting ? dt / 90 : 0), 0, 1);
+  S.mana = clamp(S.mana + dt / 150, 0, 1);
   S.joy = clamp(S.joy - dt / (awake ? 420 : 1800) - (world.poops.length > 1 ? dt / 400 : 0), 0, 1);   // full → empty in ~7 min if ignored
   const dirt = world.poops.length;
   S.health = clamp(S.health - dirt * dt / (awake ? 300 : 900) - (S.hunger > 0.85 ? dt / 600 : 0) + (dirt === 0 && S.hunger < 0.7 ? dt / 200 : 0), 0, 1);
@@ -1587,14 +1706,21 @@ function tickBrain(dt) {
           const r = resolveSpot(fp.x + (cx / cd) * reach, fp.z + (cz / cd) * reach); brain.goal.set(r.x, 0, r.z);
         }
       }
+      if (brain.purpose === 'attack') {                  // keep after the bug until it is in broom reach
+        const f = brain.foe;
+        if (!f || !world.items.includes(f)) { brain.mode = 'idle'; brain.until = 0.5; break; }
+        look = f.root.position; up = 0.6; brain.goal.set(f.root.position.x, 0, f.root.position.z);
+      }
       if (pet.airborne) break;
       brain.pause -= dt;
       if (brain.pause > 0) break;
       const dist = Math.hypot(brain.goal.x - pet.pos.x, brain.goal.z - pet.pos.z);
+      const foeD = brain.purpose === 'attack' && brain.foe ? Math.hypot(brain.foe.root.position.x - pet.pos.x, brain.foe.root.position.z - pet.pos.z) : 9;
       const foodD = brain.purpose === 'food' && it ? Math.hypot(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z) : 9;
       const chasing = brain.purpose === 'food' && it && it.walk;
       const pooD = brain.purpose === 'clean' && brain.poo ? Math.hypot(brain.poo.root.position.x - pet.pos.x, brain.poo.root.position.z - pet.pos.z) : 9;
       const closeEnough = chasing ? foodD < BODY_R + 0.95
+        : brain.purpose === 'attack' ? foeD < SWING.reach * 0.9
         : brain.purpose === 'clean' ? pooD < BODY_R + 0.75 || dist < 0.3
         : brain.purpose === 'food' ? (dist < 0.4 && foodD < BODY_R + 1.2) || (brain.hops > 10 && foodD < BODY_R + 1.0) : dist < 0.35;
       if (chasing && !closeEnough && brain.hops > 40) {   // lost it: let it go
@@ -1603,6 +1729,21 @@ function tickBrain(dt) {
       if (closeEnough || (!chasing && brain.hops > 30)) { arrive(); break; }
       planHop();
       brain.pause = 0;   // she walks; no stop-and-go between steps
+      break;
+    }
+    case 'attack': {
+      const f = brain.foe, alive = f && world.items.includes(f);
+      brain.atkT += dt;
+      if (alive) { look = f.root.position; pet.faceTo = Math.atan2(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z); }
+      up = 0.5;
+      if (!brain.atkHit && brain.atkT >= SWING.hitAt) { brain.atkHit = true; if (alive) strike(f); }
+      if (brain.atkT >= SWING.dur) {                     // the swing is over: keep at it until the bug is dead or she is spent
+        const left = alive && world.items.includes(f);
+        if (!left) { brain.mode = 'idle'; brain.until = 0.6; }
+        else if (S.energy < SWING.cost) { brain.mode = 'idle'; brain.until = 0.6; say('tired', { cool: 5 }); }
+        else if (Math.hypot(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z) < SWING.reach) startAttack(f);
+        else go(f.root.position.clone(), 'attack', true);   // the hit shoved it back: step in again
+      }
       break;
     }
     case 'eat': {
@@ -1736,7 +1877,7 @@ function orderHunt(kind) {
   const prey = aliveBugs(kind).filter((i) => i.state === 'rest' && i.grow >= 1);
   if (!prey.length) { pet.st.puffV += 2; say('nobug', { force: true, cool: 2, map: (l) => l.replace('{bug}', BUG_NAME[kind] || kind) }); return; }
   if (brain.mode === 'sleep' || brain.mode === 'nap') return poke();
-  if (['eat', 'poop', 'clean'].includes(brain.mode)) { say('busy', { force: true, cool: 3 }); return; }
+  if (BUSY.includes(brain.mode)) { say('busy', { force: true, cool: 3 }); return; }
   prey.sort((a, b) => a.root.position.distanceTo(pet.pos) - b.root.position.distanceTo(pet.pos));
   const it = prey[0];
   ring(it.root.position);
@@ -1781,6 +1922,12 @@ const LINES = {
   gross: [`ew. EW. who did this.`, `oh no. it's warm.`, `smells like legacy code.`, `i can taste it. #@%!.`, `that's a memory leak.`],
   buried: [`buried. never speak of it.`, `garbage collected.`, `out of sight. out of memory.`, `deleted. no backups.`],
   hunt: [`on it.`, `target acquired.`, `running query.`, `it can't hide.`],
+  foe: [`something crawled out of the dirt.`, `that one has teeth. #@%!.`, `bugs. with an attitude.`, `oh good. the biting kind.`],
+  bitten: [`ow. #@%!.`, `it BIT me.`, `i'm not a snack.`, `rude.`],
+  wrongTool: [`that needs the broom. press 1.`, `a shovel is not a flyswatter.`, `broom. key 1. try it.`],
+  tired: [`too tired to swing.`, `give me a minute. #@%!.`, `arms. noodles. wait.`],
+  foeDown: [`and stay down.`, `one less. forty to go.`, `squish. next.`],
+  faint: [`i'm not dead. just resting. loudly.`, `the ground is nice. i'll stay.`],
   nobug: [`no {bug}s around. wait for one.`, `zero {bug}s found. 404.`, `{bug}? not here. try again later.`],
   busy: [`not now. i'm handling it.`, `busy. very busy. smelly busy.`],
   sick: [`i feel #@%!. tap the poo.`, `health: declining. poo: abundant.`, `this place is a biohazard.`, `tap it. i'll clean it. i'm not an animal.`],
@@ -1910,7 +2057,7 @@ function renderCloud(T, E, head, t) {
   if (side < 0 && sp.x - 18 - bw < 10) side = 1;
   const ax = sp.x + side * 18;
   const bx = clamp(side > 0 ? ax - 10 * K : ax - bw + 10 * K, 10, Math.max(10, W - bw - 10));
-  const by = clamp(sp.y - 30 * K - bh - T.lift * 30 + Math.sin(t * 2.4) * 2, 66, Math.max(66, H - bh - 10));
+  const by = clamp(sp.y - 30 * K - bh - T.lift * 30 + Math.sin(t * 2.4) * 2, 66, Math.max(66, H - bh - DOCK_H));
   const hx = (sp.x - bx) / K, hy = (sp.y - 4 - by) / K, cx0 = clamp(hx, 18, T.w - 18), cy0 = T.h - 6;
   [[0.18, 7], [0.55, 12]].forEach(([f, sz], i) => {
     E.dots[i].style.left = (lerp(hx, cx0, f) - sz / 2).toFixed(1) + 'px';
@@ -2097,16 +2244,17 @@ function onDown(e) {
   Object.assign(ptr, { down: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: 0, onPet: false });
   ptr.last.set(e.clientX, e.clientY); ptr.lastT = performance.now();
   if (hitBoxPet()) return pokeBox();
-  if (hitHouse()) { world.house.stompAt = clock.t; ring(new THREE.Vector3(HOUSE_DOOR.x, 0, HOUSE_DOOR.z)); if (!['eat', 'poop', 'clean'].includes(brain.mode)) goHome(false); return; }
+  if (hitHouse()) { world.house.stompAt = clock.t; ring(new THREE.Vector3(HOUSE_DOOR.x, 0, HOUSE_DOOR.z)); if (!BUSY.includes(brain.mode)) goHome(false); return; }
   const hp = hitPet();
   if (hp) { ptr.onPet = true; renderer.domElement.setPointerCapture?.(e.pointerId); touchAt(hp, 0, 0); return; }
   const poo = hitItem(world.poops);
   if (poo) { Sound.init(); noteInput(); return orderClean([poo]); }
   const food = hitItem(world.items.filter((i) => i.state === 'rest'));
+  if (food && food.hostile) return tapFoe(food);         // an enemy, not a snack
   if (food) {
     if (brain.mode === 'sleep') return poke();
     if (S.hunger < 0.08) return refuse(food);
-    if (['eat', 'poop', 'clean'].includes(brain.mode)) return;
+    if (BUSY.includes(brain.mode)) return;
     if (brain.food && brain.food !== food) brain.food.claimed = false;
     ring(food.root.position); food.given = true;
     return fetchFood(food, true);
@@ -2116,7 +2264,7 @@ function onDown(e) {
   if (brain.mode === 'sleep') return poke();
   const s = resolveSpot(hit.x, hit.z);
   ring(new THREE.Vector3(s.x, groundY(s.x, s.z), s.z));
-  if (['eat', 'poop', 'clean'].includes(brain.mode)) return;
+  if (BUSY.includes(brain.mode)) return;
   const now = performance.now(), run = now - ptr.groundAt < DOUBLE_TAP.ms && Math.hypot(e.clientX - ptr.groundX, e.clientY - ptr.groundY) < DOUBLE_TAP.px;
   Object.assign(ptr, { groundAt: run ? -1e9 : now, groundX: e.clientX, groundY: e.clientY });
   if (!run && Math.hypot(s.x - pet.pos.x, s.z - pet.pos.z) > 3 && Math.random() < 0.5) say('summon', { cool: 10 });
@@ -2190,7 +2338,7 @@ function orderClean(list) {
   if (brain.mode === 'sleep' || brain.mode === 'nap') { list.forEach((p, i) => setTimeout(() => cleanPoop(p, i > 0), i * 140)); return; }   // napping: it just goes
   for (const p of list) if (!brain.cleanQ.includes(p)) brain.cleanQ.push(p);
   ring(list[0].root.position);
-  if (!['eat', 'poop', 'clean'].includes(brain.mode) && !(brain.mode === 'travel' && brain.purpose === 'clean')) nextClean();
+  if (!BUSY.includes(brain.mode) && !(brain.mode === 'travel' && brain.purpose === 'clean')) nextClean();
 }
 function nextClean() {
   brain.cleanQ = brain.cleanQ.filter((p) => world.poops.includes(p));
@@ -2290,7 +2438,25 @@ function currentNeed() {
   if (world.poops.length >= 2) return 'pupu';
   return null;
 }
-const statEls = { hunger: $('#statHunger'), joy: $('#statJoy'), health: $('#statHealth') };
+const statEls = { hunger: $('#statHunger'), joy: $('#statJoy') };
+const vitalEls = { health: $('#vitalHealth'), mana: $('#vitalMana'), stamina: $('#vitalStamina') };
+const toolEls = [...document.querySelectorAll('.tool')];
+/** One bar of the bottom hotbar: the fill, the aria value, and a pulse when it runs low. */
+function setVital(el, v) {
+  const pct = Math.round(clamp(v, 0, 1) * 100);
+  if (el._p === pct) return;
+  el._p = pct;
+  el.querySelector('i').style.width = pct + '%';
+  el.classList.toggle('low', v < 0.25);
+  el.setAttribute('aria-valuenow', String(pct));
+}
+/** Marks the tool in her hand on the hotbar. */
+function showTool() { for (const b of toolEls) b.setAttribute('aria-checked', String(b.dataset.tool === S.tool)); }
+/** Puts the broom or the shovel in her hand. */
+function setTool(name) {
+  if (S.tool === name) return;
+  S.tool = name; showTool(); pet.holds(name); Sound.equip(); save();
+}
 function setStat(el, v, word) {
   const pct = Math.round(clamp(v, 0, 1) * 100);
   if (!el || (el._p === pct && el._w === word)) return;
@@ -2303,8 +2469,7 @@ function setStat(el, v, word) {
 function tickStats() {
   const full = 1 - S.hunger, j = S.joy;
   setStat(statEls.hunger, full, full > 0.8 ? 'stuffed' : full > 0.55 ? 'fed' : full > 0.35 ? 'peckish' : full > 0.15 ? 'hungry' : 'starving');
-  const hp = S.health;
-  setStat(statEls.health, hp, hp > 0.8 ? 'healthy' : hp > 0.55 ? 'okay' : hp > 0.35 ? 'queasy' : hp > 0.15 ? 'sick' : 'very sick');
+  setVital(vitalEls.health, S.health); setVital(vitalEls.mana, S.mana); setVital(vitalEls.stamina, S.energy);
   setStat(statEls.joy, j, j > 0.8 ? 'thrilled' : j > 0.55 ? 'happy' : j > 0.35 ? 'fine' : j > 0.15 ? 'bored' : 'miserable');
 }
 function tickHUD() {
@@ -2359,7 +2524,7 @@ function tickTray() {
 }
 function refreshUI() {
   trayShown = '';
-  tickTray();
+  tickTray(); showTool();
   show($('#iconSoundOn'), Sound.on); show($('#iconSoundOff'), !Sound.on);
   $('#sound').setAttribute('aria-label', Sound.on ? 'Sound off' : 'Sound on');
 }
@@ -2391,9 +2556,17 @@ function onWheel(e) {
   e.preventDefault();
   zoomTarget = clamp(zoomTarget - e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015), ZOOM.min, ZOOM.max);
 }
+/** Keys 1 and 2 take the broom and the shovel. */
+function onKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  const tool = { 1: 'broom', 2: 'shovel' }[e.key];
+  if (tool) { Sound.init(); noteInput(); setTool(tool); }
+}
 function bindUI() {
   const el = renderer.domElement;
   addEventListener('wheel', onWheel, { passive: false });
+  addEventListener('keydown', onKey);
+  toolEls.forEach((b) => b.addEventListener('click', () => { Sound.init(); noteInput(); setTool(b.dataset.tool); }));
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
