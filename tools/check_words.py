@@ -90,7 +90,7 @@ for table in (yaga, box):
             for slot in re.findall(r"\{(\w+)\}", line):
                 if slot not in fills:
                     errors.append(f"unknown {{{slot}}} in: {line}")
-ui_slots = {"trayHunt": {"a", "n"}, "trayNone": {"plural"}, "clean": {"n"}, "clockAria": {"time", "phase", "next"}, "nextIn": {"phase", "m", "s"}}
+ui_slots = {"trayHunt": {"a", "n"}, "trayNone": {"plural"}, "clockAria": {"time", "phase", "next"}, "nextIn": {"phase", "m", "s"}}
 for key, allowed in ui_slots.items():
     for slot in re.findall(r"\{(\w+)\}", ui.get(key, "")):
         if slot not in allowed:

@@ -70,7 +70,6 @@ const ENV_COLORS = { M_Env_Bark: 0x5a3a2a, M_Env_Rock: 0x9a7a60, M_Env_Peak: 0xD
 const GLOW_COLOR = 0xD6A446;                // the homepage gold
 const TREE_PARTS = /^(Tree_|Branch_|Leaf_|Fruit_)/;
 const GLOW = { bark: 0.3, leaf: 0.6, fruit: 2.6 };
-const PROP_SCALE = 0.7;
 const FRUITS = ['strawberry', 'orange', 'blueberry', 'mushroom'];   // hidden for now: she eats bugs
 const FOODS = BUGS.map((b) => b.id);
 const BUG_SIZE = 0.4;                     // bugs at 40% of the original game's size, so Yaga towers over them
@@ -80,7 +79,6 @@ const BODY_R = 0.86;                      // how close things may come to her (w
 const SPAWN = { x: 0.2, z: 1.2 };         // where she starts; the terrain's walkable area grows from here
 const TREE = { x: 3.25, z: -2.05 };
 const TREE_SCALE = 0.8;                  // the middle tree, a little smaller than in the original clearing
-const POO_SCALE = 0.6;                    // poo, smaller than the original
 const OBSTACLES = [
   { x: 3.25, z: -2.05, r: 0.55 * TREE_SCALE + BODY_R },
   { x: 4.65, z: -2.15, r: 1.0 + BODY_R },
@@ -208,9 +206,7 @@ class YagaPet {
     const w = this.want;
     switch (brain.mode) {
       case 'eat': return 'football_catch';
-      case 'clean': return 'cast_a_spell';
       case 'refuse': return 'angry_01';
-      case 'poop': return 'frustrated_02';
       case 'sleep': case 'nap': return w.asleep ? 'depressed' : 'angry_02';
       case 'react': return t - this.startleAt < 1.2 ? 'hit_to_body_01' : 'greet_01';
     }
@@ -747,9 +743,6 @@ const Sound = {
   plop() { this.tone(300, 90, 0.18, 0.13, 'sine'); this.noise(0.08, 0.05, 300, 1); },
   drop() { this.tone(900, 320, 0.2, 0.06, 'sine'); },
   thud() { this.tone(200, 90, 0.08, 0.08, 'triangle'); },
-  sniff() { this.noise(0.09, 0.07, 3200, 1.2, 0, 1800); this.noise(0.08, 0.06, 3000, 1.2, 0.13, 1700); },
-  gag() { this.tone(340, 120, 0.42, 0.11, 'sawtooth'); this.tone(180, 90, 0.3, 0.08, 'triangle', 0.18); this.noise(0.3, 0.06, 500, 1.6, 0.08, 200); },
-  scuff(d = 0) { this.noise(0.13, 0.1, 700, 0.9, d, 300); },
   purr() { this.noise(0.28, 0.05, 140, 3); this.tone(70, 60, 0.28, 0.05, 'sawtooth'); },
   snore() { this.noise(1.2, 0.035, 220, 2.5, 0, 160); },
   yawn() { this.tone(330, 190, 0.7, 0.06, 'triangle'); },
@@ -768,7 +761,7 @@ const Sound = {
 const S = {
   hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
   eaten: Object.fromEntries(FOODS.map((f) => [f, 0])), meals: 0, crave: null, lastCrave: null,
-  poops: [], farm: [], flock: FLOCK, sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]; flock: hens alive
+  farm: [], flock: FLOCK, sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]; flock: hens alive
 };
 function load() {
   try { loadSave(); } catch (e) { /* storage unavailable: start fresh */ }
@@ -782,7 +775,6 @@ function loadSave() {
     const d = JSON.parse(raw);
     Object.assign(S, { hunger: d.hunger, energy: d.energy, joy: d.joy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, meals: d.meals | 0, crave: d.crave || null, sound: d.sound !== false });
     if (d.eaten) Object.assign(S.eaten, d.eaten);
-    S.poops = Array.isArray(d.poops) ? d.poops.slice(0, 5) : [];
     S.farm = Array.isArray(d.farm) ? d.farm.slice(0, 300) : [];
     S.flock = clamp(d.flock ?? FLOCK, 0, FLOCK);
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
@@ -791,7 +783,7 @@ function loadSave() {
     S.energy = clamp((S.energy ?? 0.8) + away / SET.her.awayStamina, 0, 1);   // she rests while you're away
     S.mana = clamp(S.mana + away / SET.her.awayMana, 0, 1);
     S.joy = clamp(S.joy ?? 0.5, 0, 1);
-    S.health = clamp((S.health ?? 0.9) - S.poops.length * Math.min(away, 3600) / 36000, 0.15, 1);
+    S.health = clamp(S.health ?? 0.9, 0.15, 1);
     if (!FOODS.includes(S.crave)) S.crave = null;
   }
 }
@@ -799,13 +791,13 @@ function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
-      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
+      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, t: Date.now(),
     }));
   } catch (e) { /* ignore */ }
 }
 
 /* ───────────── world ───────────── */
-const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], plots: [], hens: [], eggs: [], faintUntil: 0 };
+const world = { items: [], vanishing: [], falling: [], clods: [], plots: [], hens: [], eggs: [], faintUntil: 0 };
 let renderer, scene, camera, viewCam, pet, iconKit, area, view;
 // Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
 // Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
@@ -845,19 +837,17 @@ async function boot() {
   world.lights = { hemi, key, rim, fill };
 
   const loader = new GLTFLoader();
-  const files = ['environment', 'pupu'], folder = { environment: 'environment', pupu: 'yaga' };
-  const mb = { environment: 0.3, pupu: 0.2 };                     // rough sizes of the models, only for the loading bar
-  const [yaga, broom, worldJson, wordsJson, boxLook, houseLook, , , , ...loaded] = await Promise.all([
+  const [yaga, broom, envGltf, worldJson, wordsJson, boxLook, houseLook] = await Promise.all([
     loadGLB(loader, './assets/models/yaga/yaga-dressed.glb', 9.5),   // also preloaded by index.html
     loadGLB(loader, './assets/models/tools/broom.glb', 0.25),   // a prop in her hand, like the shovel
+    loadGLB(loader, './assets/models/environment/environment.glb', 0.3),
     getJSON('./assets/world/home.json'),
     getJSON('./words/en.json'),
     getJSON('./assets/models/box/box.json'),
     getJSON('./assets/models/environment/house.json'),
-    loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel']),   // these three keep what they load in their own modules (the three empty slots above)
+    loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel']),   // these three keep what they load in their own modules
     loadBlocks(),
     loadBugLooks(),
-    ...files.map((f) => loadGLB(loader, `./assets/models/${folder[f]}/${f}.glb`, mb[f])),
   ]);
   await building();
   useWords(wordsJson); labelPage();
@@ -867,7 +857,7 @@ async function boot() {
   world.terrain = terrainMeshes(); scene.add(world.terrain.group);
   for (const f of S.farm) addPlot(f.x, f.z, f.crop, f.at);          // the plots she dug before
 
-  const env = loaded[0].scene; dress(env);
+  const env = envGltf.scene; dress(env);
   env.position.set(0.1, 0, -1.7);
   env.traverse((o) => { if (o.isMesh && ENV_COLORS[o.material.name] != null) o.material.color.set(ENV_COLORS[o.material.name]); });
   scene.add(env);
@@ -878,11 +868,7 @@ async function boot() {
   buildMountains(env);
 
   world.models = {};
-  loaded.slice(1).forEach((g, i) => {
-    dress(g.scene); g.scene.scale.setScalar(PROP_SCALE * (files[i + 1] === 'pupu' ? POO_SCALE : 1));
-    world.models[files[i + 1]] = { scene: g.scene, clips: g.animations || [] };
-  });
-  for (const id of FOODS) world.models[id] = { make: () => makeBug(THREE, id), clips: [] };
+  for (const id of FOODS) world.models[id] = { make: () => makeBug(THREE, id) };
 
   pet = new YagaPet(yaga, broom);
   pet.root.position.set(SPAWN.x, groundY(SPAWN.x, SPAWN.z), SPAWN.z);
@@ -898,7 +884,6 @@ async function boot() {
   new ResizeObserver(resize).observe(stage);
   addEventListener('resize', resize);
 
-  for (const p of S.poops) spawnPoop(p.x, p.z, true);
   for (let i = 0; i < S.flock; i++) addHen(i);
   phase.n = S.night ? 1 : 0; applyPhase(phase.n);
   world.spawnAt = rand(4, 8); world.foeAt = rand(8, 14);
@@ -906,7 +891,7 @@ async function boot() {
   refreshUI();
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
+  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
@@ -1266,28 +1251,17 @@ function followCamera(k) {
   if (!world.viewAt || world.viewAt.distanceTo(aim) > 0.6) computeView();
 }
 
-/* ───────────── props: food and poo ───────────── */
+/* ───────────── props: the bugs ───────────── */
 const TAP_GEO = new THREE.SphereGeometry(1, 12, 8), TAP_MAT = new THREE.MeshBasicMaterial({ visible: false });
 function cloneProp(kind) {
-  const src = world.models[kind];
-  let root, bug = null;
-  if (src.make) {
-    bug = src.make(); root = new THREE.Group(); root.name = kind; root.add(bug.group); root.scale.setScalar(BUG_S);
-    const tap = new THREE.Mesh(TAP_GEO, TAP_MAT); tap.scale.setScalar(BUG_TAP_R / BUG_S); tap.position.y = 0.1; root.add(tap);
-  }
-  else root = src.scene.clone(true);
+  const bug = world.models[kind].make(), root = new THREE.Group(); root.name = kind; root.add(bug.group); root.scale.setScalar(BUG_S);
+  const tap = new THREE.Mesh(TAP_GEO, TAP_MAT); tap.scale.setScalar(BUG_TAP_R / BUG_S); tap.position.y = 0.1; root.add(tap);
   const it = { root, kind, s0: root.scale.x, grow: 0, state: 'rest', bug, seed: rand(0, 50) };
-  if (src.clips.length) {
-    const mx = new THREE.AnimationMixer(root);
-    for (const c of src.clips) mx.clipAction(c).play();
-    mx.setTime(Math.random() * src.clips[0].duration);
-    it.mixer = mx;
-  }
   root.traverse((o) => { o.userData.item = it; });
   return it;
 }
 function clearOfItems(x, z, gap = 1.3) {
-  return ![...world.items, ...world.poops].some((it) => Math.hypot(x - it.root.position.x, z - it.root.position.z) < gap)
+  return !world.items.some((it) => Math.hypot(x - it.root.position.x, z - it.root.position.z) < gap)
     && Math.hypot(x - pet.pos.x, z - pet.pos.z) > BODY_R + 0.5;
 }
 const BUG_MAX = SET.bugs.most;
@@ -1350,15 +1324,6 @@ function foodLanded(it) {
   // full up: it looks at the fruit and shakes its head
   if (it.given && S.hunger < 0.08 && brain.mode === 'idle' && !pet.airborne) refuse(it);
 }
-function spawnPoop(x, z, instant = false) {
-  const it = cloneProp('pupu');
-  const s = resolveSpot(x, z);
-  it.root.position.set(s.x, groundY(s.x, s.z) + (instant ? 0 : -0.25), s.z); it.root.rotation.y = rand(-0.6, 0.6);
-  it.grow = instant ? 1 : 0; it.root.scale.setScalar(instant ? it.s0 : 0.001);
-  scene.add(it.root); world.poops.push(it);
-  refreshUI();
-  return it;
-}
 /** A bug left far behind wanders off, so there are always some near her. */
 function recycleFarBug() {
   const far = aliveBugs().filter((i) => !i.claimed && i.root.position.distanceTo(pet.pos) > 16)
@@ -1367,7 +1332,6 @@ function recycleFarBug() {
 }
 function vanish(it, delay = 0, lift = 1.1) {
   world.items = world.items.filter((o) => o !== it);
-  world.poops = world.poops.filter((o) => o !== it);
   world.vanishing.push({ it, t: -delay, dur: 0.35, lift });
 }
 // bugs walk the clearing: each kind its own pace, each bug a bit faster or slower than its kind.
@@ -1471,7 +1435,7 @@ function faint() {
   world.faintUntil = clock.t + HOSTILE.faintFor;
   hostileBugs().forEach(sendOff);
   if (brain.food) brain.food.claimed = false;
-  brain.food = brain.foe = null; brain.cleanQ.length = 0;
+  brain.food = brain.foe = null;
   brain.mode = 'nap'; brain.napUntil = clock.t + HOSTILE.faintFor; S.health = HOSTILE.faintHealth;
   pet.play('fall', 3); say('faint', { force: true });
 }
@@ -1792,8 +1756,7 @@ function tickProps(dt) {
       world.foeAt = rand(...(S.night ? HOSTILE.nightEvery : HOSTILE.dayEvery));
     }
   }
-  for (const it of [...world.items, ...world.poops]) {
-    if (it.mixer) it.mixer.update(dt);
+  for (const it of world.items) {
     if (it.bug) tickBug(it, dt);
     if (it.hostile) tickBite(it, dt);
     if (it.grow < 1) {
@@ -1817,7 +1780,6 @@ function tickProps(dt) {
   for (const v of world.vanishing) {
     v.t += dt; if (v.t < 0) continue;
     const k = Math.min(1, v.t / v.dur), e = 1 - Math.pow(1 - k, 2);
-    if (v.it.mixer) v.it.mixer.update(dt);
     if (v.it.bug) tickBug(v.it, dt);
     v.it.root.scale.setScalar(Math.max(0.001, (1 - e) * v.it.s0));
     v.it.root.position.y += dt * v.lift * 3;
@@ -1830,10 +1792,10 @@ function tickProps(dt) {
 
 /* ───────────── the brain ───────────── */
 const clock = { t: 0 };
-const BUSY = ['eat', 'poop', 'clean', 'attack', 'farm'];     // modes she is not interrupted in
-const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, poopAt: null, noticed: null, noticeAt: -9,
+const BUSY = ['eat', 'attack', 'farm'];     // modes she is not interrupted in
+const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, noticed: null, noticeAt: -9,
   reactUntil: 0, contentUntil: 0, yawnAt: 8, lookAt: null, eatT: 0, celebrate: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
-  pokes: [], lastPoke: -99, grinUntil: 0, cleanQ: [], poo: null, cleanT: 0, cleaned: false };
+  pokes: [], lastPoke: -99, grinUntil: 0 };
 
 function go(goal, purpose, urgent = false) {
   brain.mode = 'travel'; brain.goal = goal; brain.purpose = purpose; brain.urgent = urgent; brain.hops = 0; brain.pause = urgent ? 0.05 : 0.25;
@@ -1866,12 +1828,6 @@ function arrive() {
   if (pur === 'food' && brain.food && world.items.includes(brain.food)) return startEat(brain.food);
   if (pur === 'attack' && brain.foe && world.items.includes(brain.foe)) return startAttack(brain.foe);
   if (pur === 'farm' && brain.farm) return startFarm();
-  if (pur === 'clean') {
-    brain.mode = 'clean'; brain.cleanT = 0; brain.cleaned = false; brain.cl = null;
-    setTimeout(() => boxReact('spell', 0.6), 1200);
-    if (brain.poo) pet.faceTo = Math.atan2(brain.poo.root.position.x - pet.pos.x, brain.poo.root.position.z - pet.pos.z);
-    return;
-  }
   if (pur === 'home' || pur === 'homeNap') {
     pet.faceTo = faceCamAngle(); world.house.stompAt = clock.t;
     if (pur === 'homeNap') { brain.mode = 'nap'; brain.napUntil = clock.t + 22; boxReact('nap', 0.8); return; }
@@ -1905,7 +1861,6 @@ function refuse(it) {
 
 function poke() {
   const t = clock.t;
-  if (brain.mode === 'clean') { pet.st.puffV += 3; Sound.grumble(); say('busy', { force: true, cool: 3 }); return; }   // hands full. so to speak.
   pet.pokeAt = t; brain.lastPoke = t;
   brain.pokes = brain.pokes.filter((p) => t - p < 5); brain.pokes.push(t);
   if (brain.mode === 'sleep') {       // sleepy grumble, one eye open
@@ -1923,11 +1878,6 @@ function poke() {
   setTimeout(() => boxReact('yagaPoked', 0.5), 1500);
 }
 
-function doPoop() {
-  setTimeout(() => boxReact('poop', 0.8), 900);
-  brain.mode = 'poop'; brain.until = 1.6; brain.poopT = 0; brain.poopDone = false;
-}
-
 function tickBrain(dt) {
   const t = clock.t, w = pet.want, it = brain.food, HER = SET.her;
   // ── needs drift ──
@@ -1937,9 +1887,8 @@ function tickBrain(dt) {
   if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / HER.staminaNap, 0, 1);
   else S.energy = clamp(S.energy - dt / HER.staminaDrain + (resting ? dt / HER.staminaRest : 0), 0, 1);
   S.mana = clamp(S.mana + dt / HER.manaRegain, 0, 1);
-  S.joy = clamp(S.joy - dt / (awake ? HER.joyAwake : HER.joyAsleep) - (world.poops.length > 1 ? dt / HER.joyDirty : 0), 0, 1);   // full → empty in ~7 min if ignored
-  const dirt = world.poops.length;
-  S.health = clamp(S.health - dirt * dt / (awake ? HER.healthDirtAwake : HER.healthDirtAsleep) - (S.hunger > 0.85 ? dt / HER.healthStarving : 0) + (dirt === 0 && S.hunger < 0.7 ? dt / HER.healthRecover : 0), 0, 1);
+  S.joy = clamp(S.joy - dt / (awake ? HER.joyAwake : HER.joyAsleep), 0, 1);   // full → empty in ~7 min if ignored
+  S.health = clamp(S.health - (S.hunger > 0.85 ? dt / HER.healthStarving : 0) + (S.hunger < 0.7 ? dt / HER.healthRecover : 0), 0, 1);
   if (!S.crave && S.hunger > HER.cravesAbove) { S.crave = pick(FOODS.filter((f) => f !== S.lastCrave)); refreshUI(); say('crave_' + S.crave, { cool: 4 }); }
   if (S.crave && S.hunger < HER.cravingEndsBelow) { S.crave = null; refreshUI(); }
 
@@ -1948,7 +1897,7 @@ function tickBrain(dt) {
   // ── defaults for the face: the expression follows the mood ──
   const sleepy = S.energy < 0.28;   // night or day: she keeps going, she just gets tired
   let face = t < brain.grinUntil || S.joy > 0.7 ? 'grin' : 'smile';
-  if (S.hunger > 0.8 || S.joy < 0.18 || S.health < 0.3 || world.poops.length >= 2 || sleepy) face = 'grumpy';
+  if (S.hunger > 0.8 || S.joy < 0.18 || S.health < 0.3 || sleepy) face = 'grumpy';
   let up = FACES[face].up, lo = FACES[face].lo, flap = 0, look = null, droop = 0.35 + S.hunger * 0.35, puff = (S.joy - 0.45) * 0.25, squat = 0, shake = 0;
   if (sleepy) { up = Math.min(up, 0.12); droop += 0.1; }
   if (S.health < 0.4) { up = Math.min(up, 0.25); droop += 0.15; }
@@ -1962,7 +1911,7 @@ function tickBrain(dt) {
   if (t < (brain.yawnUntil || 0)) { flap = 1.5 * Math.sin(clamp((brain.yawnUntil - t) / 1.4, 0, 1) * Math.PI); face = 'oh'; up = 0.02; lo = -0.3; }
 
   // hungry, and someone dropped food: drop the stroll and go get it
-  if (!pet.airborne && !brain.cleanQ.length && S.hunger > 0.18 && (brain.mode === 'idle' || (brain.mode === 'travel' && brain.purpose === 'wander'))) {
+  if (!pet.airborne && S.hunger > 0.18 && (brain.mode === 'idle' || (brain.mode === 'travel' && brain.purpose === 'wander'))) {
     const given = world.items.filter((i) => i.given && i.state === 'rest' && !i.claimed && i.grow >= 1);
     if (given.length) {
       const cost = (i) => i.root.position.distanceTo(pet.pos) + (i.given ? 0 : 4);
@@ -1974,8 +1923,6 @@ function tickBrain(dt) {
   switch (brain.mode) {
     case 'idle': {
       if (pet.airborne) break;
-      if (brain.cleanQ.length && nextClean()) break;
-      if (brain.poopAt != null && t > brain.poopAt && world.poops.length < 5) { brain.poopAt = null; doPoop(); break; }
       if (S.energy < 0.04) { brain.mode = 'nap'; brain.napUntil = t + 22; boxReact('nap', 0.8); break; }
       const foe = S.tool === 'broom' && S.energy >= SWING.cost ? foeToDefend() : null;   // with the broom in hand she looks after the flock
       if (foe) {
@@ -1993,13 +1940,6 @@ function tickBrain(dt) {
       break;
     }
     case 'travel': {
-      if (brain.purpose === 'clean') {
-        const p = brain.poo;
-        if (!p || !world.poops.includes(p)) { if (!nextClean()) { brain.mode = 'idle'; brain.until = 0.5; } break; }
-        look = p.root.position; up = 0.6;
-        const fp = p.root.position, dx = fp.x - pet.pos.x, dz = fp.z - pet.pos.z, d = Math.hypot(dx, dz) || 1e-3;
-        const r = resolveSpot(fp.x - (dx / d) * (BODY_R + 0.35), fp.z - (dz / d) * (BODY_R + 0.35)); brain.goal.set(r.x, 0, r.z);
-      }
       if (brain.purpose === 'food') {
         if (!it || !world.items.includes(it)) { brain.mode = 'idle'; brain.until = 0.5; break; }
         look = it.root.position; up = 0.7;
@@ -2026,10 +1966,8 @@ function tickBrain(dt) {
       const foeD = brain.purpose === 'attack' && brain.foe ? Math.hypot(brain.foe.root.position.x - pet.pos.x, brain.foe.root.position.z - pet.pos.z) : 9;
       const foodD = brain.purpose === 'food' && it ? Math.hypot(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z) : 9;
       const chasing = brain.purpose === 'food' && it && it.walk;
-      const pooD = brain.purpose === 'clean' && brain.poo ? Math.hypot(brain.poo.root.position.x - pet.pos.x, brain.poo.root.position.z - pet.pos.z) : 9;
       const closeEnough = chasing ? foodD < BODY_R + 0.95
         : brain.purpose === 'attack' ? foeD < SWING.reach * 0.9
-        : brain.purpose === 'clean' ? pooD < BODY_R + 0.75 || dist < 0.3
         : brain.purpose === 'food' ? (dist < 0.4 && foodD < BODY_R + 1.2) || (brain.hops > 10 && foodD < BODY_R + 1.0) : dist < 0.35;
       if (chasing && !closeEnough && brain.hops > 40) {   // lost it: let it go
         it.claimed = false; brain.food = null; brain.mode = 'idle'; brain.until = rand(1, 2); say('escaped', { force: true, cool: 6 }); break;
@@ -2093,54 +2031,6 @@ function tickBrain(dt) {
       }
       break;
     }
-    case 'clean': {
-      // sniff… gag… turn its back on it and kick dirt over it like a dog, then shiver it off
-      brain.cleanT += dt; const e = brain.cleanT, p = brain.poo, live = p && world.poops.includes(p), pp = live ? p.root.position : null;
-      const C = brain.cl || (brain.cl = { kicks: 0, mk: 0, nextKick: 0 });
-      if (C.mound && C.doneAt) {                       // the mound settles into the ground
-        C.mound.scale.y *= Math.max(0, 1 - dt * 3.5); C.mound.scale.x *= 1 - dt * 0.6; C.mound.scale.z *= 1 - dt * 0.6;
-        if (C.mound.scale.y < 0.01) { scene.remove(C.mound); C.mound = null; }
-      } else if (C.mound) {
-        C.mk = ease(C.mk, C.kicks / 4, 3.5, dt);
-        C.mound.scale.set(0.5 * (0.45 + 0.55 * C.mk), 0.32 * C.mk + 0.001, 0.5 * (0.45 + 0.55 * C.mk));
-        if (live) pp.y = groundY(pp.x, pp.z) - 0.42 * C.mk;
-      }
-      if (e < 0.8) {                                    // sniff, sniff
-        look = pp; face = 'oh'; up = 0.66; lo = -0.72;
-        squat = -0.08 * Math.max(0, Math.sin(e * 15));
-        if (!C.s1 && e > 0.08) { C.s1 = 1; Sound.sniff(); }
-        if (!C.s2 && e > 0.42) { C.s2 = 1; Sound.sniff(); }
-      } else if (e < 1.6) {                             // the smell hits
-        if (!C.gag) { C.gag = 1; pet.st.puffV += 14; Sound.gag(); say('gross', { force: true }); }
-        look = pp; face = 'snarl'; up = 0.04; lo = -0.4; droop += 0.25;
-        flap = 0.3 + 0.5 * Math.sin(e * 32); shake = e < 1.2 ? 1 : 0.3; squat = -0.05;
-      } else if (!C.recoil) {                           // can't look at it: hop away, back to the mess
-        C.recoil = 1;
-        C.away = pp ? Math.atan2(pet.pos.x - pp.x, pet.pos.z - pp.z) : pet.heading + Math.PI;
-        const s = resolveSpot(pet.pos.x + Math.sin(C.away) * 0.6, pet.pos.z + Math.cos(C.away) * 0.6);
-        pet.startHop(s.x, s.z, { h: 0.32 }); C.nextKick = e + 0.55;
-        face = 'grumpy';
-      } else if (C.kicks < 4) {                         // kick, kick, kick, kick
-        pet.faceTo = C.away; face = 'grumpy'; up = 0.12; lo = -0.5; squat = pet.airborne ? 0 : -0.07;
-        if (!pet.airborne && e > C.nextKick) {
-          C.kicks++; C.nextKick = e + 0.34;
-          pet.startHop(pet.pos.x, pet.pos.z, { h: 0.16, ant: 0.05 });
-          if (pp) kickDirt(pp, C);
-          Sound.scuff(); Sound.scuff(0.08);
-        }
-      } else if (!C.doneAt) {
-        if (!pet.airborne && e > C.nextKick) {          // buried. now make it vanish
-          C.doneAt = e;
-          if (live) cleanPoop(p, true);
-          Sound.poof(); say('buried', { force: true });
-        }
-      } else {                                          // shiver it off, glance back
-        face = 'grin'; up = 0.48; lo = -0.4; shake = e - C.doneAt < 0.4 ? 0.4 : 0; puff = 0.12;
-        if (e - C.doneAt > 0.25) pet.faceTo = faceCamAngle();
-        if (e - C.doneAt > 1.0) { if (C.mound) { scene.remove(C.mound); C.mound = null; } brain.cl = null; brain.poo = null; if (!nextClean()) { brain.mode = 'idle'; brain.until = rand(0.8, 1.6); } }
-      }
-      break;
-    }
     case 'refuse': {
       brain.until -= dt; shake = brain.until > 0.3 ? 1 : 0; flap = 0; face = 'grumpy'; up = 0.12; lo = -0.5;
       look = brain.lookAt || null;
@@ -2151,23 +2041,6 @@ function tickBrain(dt) {
       brain.until -= dt;
       if (t < brain.reactUntil) { up = 0.88; lo = -0.82; flap = 0.5; face = 'oh'; }
       if (brain.until <= 0) { brain.mode = 'idle'; brain.until = rand(1, 2.5); }
-      break;
-    }
-    case 'poop': {
-      brain.poopT += dt; squat = brain.poopT < 0.9 ? -0.16 * smooth(0, 0.3, brain.poopT) : 0;
-      up = 0.1; lo = -0.4; face = 'grumpy';
-      if (!brain.poopDone && brain.poopT > 0.55) {
-        brain.poopDone = true;
-        const back = pet.heading + Math.PI;
-        spawnPoop(pet.pos.x + Math.sin(back) * (BODY_R + 0.35), pet.pos.z + Math.cos(back) * (BODY_R + 0.35));
-        Sound.plop(); say('poop', { force: true });
-      }
-      if (brain.poopT > 1.1) {
-        brain.mode = 'travel'; brain.purpose = 'wander'; brain.urgent = false; brain.hops = 29; brain.pause = 0;
-        const fwd = pet.heading;
-        const r = resolveSpot(pet.pos.x + Math.sin(fwd) * 1.4, pet.pos.z + Math.cos(fwd) * 1.4);
-        brain.goal = new THREE.Vector3(r.x, 0, r.z);
-      }
       break;
     }
     case 'sleep': case 'nap': {
@@ -2221,7 +2094,6 @@ function eaten(it) {
   if (match) { S.lastCrave = S.crave; S.crave = null; brain.celebrate = 1; }
   S.meals++;
   setTimeout(() => boxReact('eat', 0.5), 700);
-  if (brain.poopAt == null && (S.hunger < 0.35 ? Math.random() < 0.7 : S.meals % 3 === 0)) brain.poopAt = clock.t + rand(6, 14);
   refreshUI(); save();
 }
 
@@ -2294,7 +2166,6 @@ function tickTalk(t) {
       if (t - Talk.inputAt > 25 && Talk.idleN < 3) { if (say('idle')) Talk.idleN++; }
       else if (S.crave) say('crave_' + S.crave);
       else if (S.health < 0.35) say('sick');
-      else if (world.poops.length >= 2) say('dirty');
       else if (S.joy < 0.25) say('lonely');
       else if (S.energy < 0.28) say('sleepy');
       else if (Math.random() < 0.45) say(null, { text: gibber(), gib: true });
@@ -2370,8 +2241,7 @@ function boxReact(kind, chance = 1) {
   if (!Box.pet || Box.dialog.length || boxTalking() || Math.random() > chance) return;
   boxSay(pick(BOX_LINES[kind]));
   const b = Box.pet;
-  if (kind === 'eat' || kind === 'spell') boxMood('grumpy', 2.5);
-  if (kind === 'poop') { boxMood('snarl', 2.2); b.st.puffV += 10; }
+  if (kind === 'eat') boxMood('grumpy', 2.5);
   if (kind === 'yagaPoked') { boxMood('grin', 2.5); b.startHop(b.pos.x, b.pos.z, { h: 0.5, ant: 0.1 }); }
   if (kind === 'dance') boxMood('oh', 1.5);
 }
@@ -2493,8 +2363,6 @@ function onDown(e) {
   if (hitHouse()) { world.house.stompAt = clock.t; ring(new THREE.Vector3(HOUSE_DOOR.x, 0, HOUSE_DOOR.z)); if (!BUSY.includes(brain.mode)) goHome(false); return; }
   const hp = hitPet();
   if (hp) { ptr.onPet = true; renderer.domElement.setPointerCapture?.(e.pointerId); touchAt(hp, 0, 0); return; }
-  const poo = hitItem(world.poops);
-  if (poo) { Sound.init(); noteInput(); return orderClean([poo]); }
   const food = hitItem(world.items.filter((i) => i.state === 'rest'));
   if (food && food.hostile) return tapFoe(food);         // an enemy, not a snack
   const egg = hitEgg();
@@ -2530,7 +2398,7 @@ function touchAt(hit, vx, vy) {
 function onMove(e) {
   ptr.hx = e.clientX; ptr.hy = e.clientY; ptr.hoverAt = clock.t;
   if (!ptr.down) {
-    if (!MOBILE) { toNdc(e); renderer.domElement.style.cursor = hitPet() || hitItem([...world.poops, ...world.items.filter((i) => i.state === 'rest')]) ? 'pointer' : ''; moveCellMark(); }
+    if (!MOBILE) { toNdc(e); renderer.domElement.style.cursor = hitPet() || hitItem(world.items.filter((i) => i.state === 'rest')) ? 'pointer' : ''; moveCellMark(); }
     return;
   }
   if (e.pointerId !== ptr.id || !ptr.onPet) return;
@@ -2557,23 +2425,8 @@ function onUp(e) {
   ptr.onPet = false;
 }
 
-const DIRT_GEO = new THREE.IcosahedronGeometry(1, 1), MOUND_GEO = new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+const DIRT_GEO = new THREE.IcosahedronGeometry(1, 1);
 const DIRT_MAT = new THREE.MeshStandardMaterial({ name: 'M_Dirt', color: 0x5a4030, roughness: 1, flatShading: true });
-const MOUND_MAT = new THREE.MeshStandardMaterial({ name: 'M_DirtMound', color: 0x4a3426, roughness: 1 });
-function kickDirt(target, C) {
-  const back = C.away + Math.PI;                    // out from under its back end, toward the poo
-  const o = new THREE.Vector3(pet.pos.x + Math.sin(back) * BODY_R * 0.85, pet.pos.y + 0.12, pet.pos.z + Math.cos(back) * BODY_R * 0.85);
-  for (let i = 0; i < 8; i++) {
-    const m = new THREE.Mesh(DIRT_GEO, DIRT_MAT); m.scale.setScalar(rand(0.045, 0.1)); m.position.copy(o); m.castShadow = true;
-    m.rotation.set(rand(0, 6), rand(0, 6), 0); scene.add(m);
-    const T = rand(0.32, 0.5), tx = target.x + rand(-0.4, 0.4), tz = target.z + rand(-0.4, 0.4), gy = groundY(tx, tz);
-    world.clods.push({ m, v: new THREE.Vector3((tx - o.x) / T, (0.5 * 16 * T * T + gy - o.y) / T, (tz - o.z) / T), spin: rand(-12, 12), dead: 0, floor: gy + 0.02 });
-  }
-  if (!C.mound) {
-    C.mound = new THREE.Mesh(MOUND_GEO, MOUND_MAT); C.mound.position.set(target.x, groundY(target.x, target.z), target.z);
-    C.mound.receiveShadow = true; C.mound.castShadow = true; C.mound.scale.set(0.2, 0.001, 0.2); scene.add(C.mound);
-  }
-}
 function tickClods(dt) {
   for (const c of world.clods) {
     if (c.dead) { c.dead += dt; c.m.scale.multiplyScalar(Math.max(0, 1 - dt * 5)); continue; }
@@ -2583,36 +2436,6 @@ function tickClods(dt) {
   for (const c of world.clods) if (c.dead > 0.45) scene.remove(c.m);
   world.clods = world.clods.filter((c) => c.dead <= 0.45);
 }
-// tap a poo (or the clean button): the box hops over and cleans it up itself
-function orderClean(list) {
-  if (!list.length) return;
-  if (brain.mode === 'sleep' || brain.mode === 'nap') { list.forEach((p, i) => setTimeout(() => cleanPoop(p, i > 0), i * 140)); return; }   // napping: it just goes
-  for (const p of list) if (!brain.cleanQ.includes(p)) brain.cleanQ.push(p);
-  ring(list[0].root.position);
-  if (!BUSY.includes(brain.mode) && !(brain.mode === 'travel' && brain.purpose === 'clean')) nextClean();
-}
-function nextClean() {
-  brain.cleanQ = brain.cleanQ.filter((p) => world.poops.includes(p));
-  if (!brain.cleanQ.length) return false;
-  brain.cleanQ.sort((a, b) => a.root.position.distanceTo(pet.pos) - b.root.position.distanceTo(pet.pos));
-  if (brain.food && brain.mode === 'travel') { brain.food.claimed = false; brain.food = null; }
-  brain.poo = brain.cleanQ.shift();
-  go(brain.poo.root.position.clone(), 'clean', true);
-  return true;
-}
-function cleanPoop(p, quiet = false) {
-  if (!world.poops.includes(p)) return;
-  const sp = screenOf(p.root.position.clone().setY(p.root.position.y + 0.4));
-  vanish(p, 0, 0.8);
-  sparkle(sp.x, sp.y);
-  if (!quiet) { Sound.poof(); say('clean', { force: true, cool: 2 }); }
-  S.joy = clamp(S.joy + SET.her.cleanJoy, 0, 1);
-  S.health = clamp(S.health + SET.her.cleanHealth, 0, 1);
-  pet.st.puffV += 3;
-  brain.glance.copy(p.root.position); brain.glanceUntil = clock.t + 0.8;
-  refreshUI(); save();
-}
-
 /* ───────────── marker ring on the ground ───────────── */
 let markerMesh, markerLife = 0;
 function marker() {
@@ -2637,22 +2460,19 @@ function makeIcons() {
     scene.add(new THREE.HemisphereLight(0xFFF1E0, 0x7a4a2e, 1.5));
     const k = new THREE.DirectionalLight(0xFFF3DE, 2.4); k.position.set(-2, 3.5, 3); scene.add(k);
     const rm = new THREE.DirectionalLight(0xFFC98A, 0.9); rm.position.set(2.5, 1.5, -3); scene.add(rm);
-    const src = world.models[kind], bug = src.make ? src.make() : null;
-    const pivot = new THREE.Group(), obj = bug ? bug.group : src.scene.clone(true);
+    const bug = world.models[kind].make();
+    const pivot = new THREE.Group(), obj = bug.group;
     obj.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
     const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
     const s = 1 / (Math.max(size.x, size.y, size.z) || 1);
     obj.position.sub(c).multiplyScalar(s); obj.scale.multiplyScalar(s);
     pivot.add(obj); scene.add(pivot);
-    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(0, bug ? 1.2 : 0.5, bug ? 2.3 : 2.55); cam.lookAt(0, 0, 0);
-    let mixer = null;
-    if (world.models[kind].clips.length) { mixer = new THREE.AnimationMixer(obj); world.models[kind].clips.forEach((cl) => mixer.clipAction(cl).play()); }
-    return { scene, cam, pivot, mixer, bug };
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(0, 1.2, 2.3); cam.lookAt(0, 0, 0);
+    return { scene, cam, pivot, bug };
   };
-  const scenes = {}; [...FOODS, 'pupu'].forEach((k) => (scenes[k] = make(k)));
+  const scenes = {}; FOODS.forEach((k) => (scenes[k] = make(k)));
   const targets = [];
   document.querySelectorAll('.care.food').forEach((b) => targets.push({ kind: b.dataset.food, canvas: b.querySelector('canvas') }));
-  targets.push({ kind: 'pupu', canvas: $('#clean canvas') });
   targets.forEach((tg) => (tg.ctx = tg.canvas.getContext('2d')));
   const bubble = { canvas: $('#bubbleIcon'), kind: null }; bubble.ctx = bubble.canvas.getContext('2d');
   let acc = 0;
@@ -2665,8 +2485,8 @@ function makeIcons() {
   };
   return {
     tick(dt, t) {
-      acc += dt; if (acc < 1 / 24) return; const step = acc; acc = 0;
-      Object.values(scenes).forEach((s, i) => { if (s.mixer) s.mixer.update(step); if (s.bug) s.bug.tick(t + i * 3, 0.55); });
+      acc += dt; if (acc < 1 / 24) return; acc = 0;
+      Object.values(scenes).forEach((s, i) => s.bug.tick(t + i * 3, 0.55));
       targets.forEach((tg, i) => draw(tg, t * 0.55 + i));
       if (bubble.kind) draw(bubble, Math.sin(t * 1.3) * 0.6);
     },
@@ -2686,7 +2506,6 @@ function currentNeed() {
   if (brain.mode === 'eat') return null;
   if (S.energy < 0.28) return 'moon';
   if (S.crave) return S.crave;
-  if (world.poops.length >= 2) return 'pupu';
   return null;
 }
 const statEls = { hunger: $('#statHunger'), joy: $('#statJoy') };
@@ -2755,11 +2574,11 @@ function tickHUD() {
     bubbleEl.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
   }
 }
-// the tray shows what's alive out there right now, and the poo waiting to be cleaned
+// the tray shows what's alive out there right now
 let trayShown = '';
 function tickTray() {
-  const counts = FOODS.map((k) => aliveBugs(k).length), np = world.poops.length;
-  const key = counts.join(',') + '|' + np + '|' + S.crave + S.night;
+  const counts = FOODS.map((k) => aliveBugs(k).length);
+  const key = counts.join(',') + '|' + S.crave + S.night;
   if (key === trayShown) return;
   trayShown = key;
   document.querySelectorAll('.care.food').forEach((b) => {
@@ -2769,11 +2588,6 @@ function tickTray() {
     b.classList.toggle('wanted', S.crave === b.dataset.food && n > 0);
     b.setAttribute('aria-label', n ? fill(UI.trayHunt, { a: bug.a, n }) : fill(UI.trayNone, { plural: bug.plural }));
   });
-  const c = $('#clean'), cnt = c.querySelector('.count');
-  cnt.hidden = false; cnt.textContent = np; cnt.classList.toggle('alert', np > 0);
-  c.classList.toggle('wanted', np >= 2);
-  c.classList.toggle('dim', np === 0);
-  c.setAttribute('aria-label', np ? fill(UI.clean, { n: np }) : UI.cleanNone);
 }
 function refreshUI() {
   trayShown = '';
@@ -2829,12 +2643,6 @@ function bindUI() {
     Sound.init(); noteInput();
     orderHunt(b.dataset.food);
   }));
-  $('#clean').addEventListener('click', () => {
-    Sound.init(); noteInput();
-    const list = [...world.poops];
-    if (!list.length) { pet.st.puffV += 2; say('spotless', { force: true, cool: 4 }); return; }
-    orderClean(list);
-  });
   $('#sound').addEventListener('click', () => { Sound.init(); Sound.on = !Sound.on; S.sound = Sound.on; refreshUI(); save(); say(Sound.on ? 'unmute' : 'mute', { force: true }); });
 }
 

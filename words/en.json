@@ -50,19 +50,6 @@
       "beetle. the one that looks real.",
       "jewel beetle or i #@%!ing riot."
     ],
-    "gross": [
-      "ew. EW. who did this.",
-      "oh no. it's warm.",
-      "smells like legacy code.",
-      "i can taste it. #@%!.",
-      "that's a memory leak."
-    ],
-    "buried": [
-      "buried. never speak of it.",
-      "garbage collected.",
-      "out of sight. out of memory.",
-      "deleted. no backups."
-    ],
     "hunt": [
       "on it.",
       "target acquired.",
@@ -178,13 +165,13 @@
     ],
     "busy": [
       "not now. i'm handling it.",
-      "busy. very busy. smelly busy."
+      "busy. very busy. important busy."
     ],
     "sick": [
-      "i feel #@%!. tap the poo.",
-      "health: declining. poo: abundant.",
-      "this place is a biohazard.",
-      "tap it. i'll clean it. i'm not an animal."
+      "i feel #@%!.",
+      "health: declining. patience: gone.",
+      "everything hurts. thanks for asking.",
+      "i'm not dying. i'm buffering."
     ],
     "lonely": [
       "nobody visits the old witch anymore.",
@@ -235,24 +222,6 @@
       "personal space?",
       "is it real hair? none of your #@%! business.",
       "you can pet me. i won't say thanks."
-    ],
-    "poop": [
-      "don't look at me.",
-      "that's model output. technically.",
-      "oops. anyway."
-    ],
-    "dirty": [
-      "clean that up. it's YOUR clearing.",
-      "two of them. TWO.",
-      "smells like a #@%!ing standup."
-    ],
-    "clean": [
-      "finally. hygiene.",
-      "thank you. i guess.",
-      "sparkling. like my reputation."
-    ],
-    "spotless": [
-      "clean what? i'm spotless."
     ],
     "summon": [
       "coming. ugh.",
@@ -311,20 +280,10 @@
       "you didn't even share.",
       "rated: suspicious."
     ],
-    "poop": [
-      "ew. EW.",
-      "i'm not cleaning that.",
-      "that's on you."
-    ],
     "yagaPoked": [
       "ha. do it again.",
       "finally, someone gets it.",
       "poke her harder."
-    ],
-    "spell": [
-      "show-off.",
-      "wow. magic. for poo.",
-      "abracadabra, gross."
     ],
     "dance": [
       "no.",
@@ -465,9 +424,6 @@
     "tray": "Bugs out there: tap one to hunt it",
     "trayHunt": "Hunt {a} ({n} around)",
     "trayNone": "No {plural} around",
-    "pooTray": "Poo to clean",
-    "clean": "Clean up the poo ({n})",
-    "cleanNone": "Nothing to clean",
     "hotbar": "Health, mana, stamina and tools",
     "health": "Health",
     "mana": "Mana",

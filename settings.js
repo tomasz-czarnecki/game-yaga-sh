@@ -22,18 +22,13 @@ export default {
     manaRegain: 150,        // empty → full
     joyAwake: 420,          // happy → sad if ignored, while she is up
     joyAsleep: 1800,        // ...while she sleeps
-    joyDirty: 400,          // extra sadness while more than one poo is lying about
-    healthDirtAwake: 300,   // full → empty from each poo lying about, while she is up
-    healthDirtAsleep: 900,  // ...while she sleeps
     healthStarving: 600,    // full → empty while she is very hungry
-    healthRecover: 200,     // empty → full while the ground is clean and she is fed
+    healthRecover: 200,     // empty → full while she is fed
 
     cravesAbove: 0.55,      // hunger at which she starts craving a kind of bug
     cravingEndsBelow: 0.25, // hunger at which the craving goes away
 
     strokeJoy: 0.006,       // happiness each time you stroke her
-    cleanJoy: 0.08,         // happiness for each poo cleaned up
-    cleanHealth: 0.15,      // health for each poo cleaned up
 
     // while the page is closed (up to 3 days): seconds for a bar to change by 1
     awayHunger: 10800,      // hungrier
