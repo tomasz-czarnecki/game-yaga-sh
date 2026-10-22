@@ -97,7 +97,7 @@ export default {
   },
 
   hens: {
-    flock: 4,               // how many she keeps (lost ones come back with the morning)
+    flock: 0,               // how many she keeps (lost ones come back with the morning). 0 = no hens, and so no eggs; it was 4
     speed: 0.7,             // how fast a hen strolls
     runSpeed: 1.9,          // how fast a hen runs from a bug
     healIn: 120,            // seconds for a bitten hen to heal fully
