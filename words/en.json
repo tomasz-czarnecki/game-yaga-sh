@@ -75,6 +75,18 @@
       "bugs. with an attitude.",
       "oh good. the biting kind."
     ],
+    "foeCalm": [
+      "something big crawled out of the dirt.",
+      "a big one. it hasn't noticed me. good.",
+      "red bug. leave it be.",
+      "it's just wandering. so am i."
+    ],
+    "foeAngry": [
+      "now it's cross. nice going.",
+      "it bites back. of course it does.",
+      "i poked it. it noticed.",
+      "ok. now it's personal."
+    ],
     "bitten": [
       "ow. #@%!.",
       "it BIT me.",

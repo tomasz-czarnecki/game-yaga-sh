@@ -60,15 +60,16 @@ export default {
   },
 
   hostile: {
-    kinds: ['beetle', 'ant'],   // the kinds that turn up as biters
+    aggressive: false,   // false: the big red monsters wander calmly and turn on her only after she hits one. true: they hunt the hens and her on their own
+    kinds: ['beetle', 'ant'],   // the kinds that turn up as monsters
     hp: 2,                  // broom hits to kill one
     size: 1.5,              // how much bigger than a normal bug
-    speed: 1.25,            // how fast it crawls
+    speed: 1.25,            // how fast it crawls once it is angry (calm ones wander slowly)
     bite: 0.04,             // health she loses from one bite
-    biteHen: 0.2,           // health a hen loses from one bite (a hen has 1)
+    biteHen: 0.2,           // health a hen loses from one bite (a hen has 1); aggressive mode only
     biteEvery: 1.8,         // seconds between bites
-    henReach: 0.5,          // how near a hen it must be to bite her
-    herRange: 2.2,          // it goes for her when she is this close, otherwise for the nearest hen
+    henReach: 0.5,          // how near a hen a monster must be to bite it; aggressive mode only
+    herRange: 2.2,          // it goes for her when she is this close, otherwise for the nearest hen; aggressive mode only
     stayFor: [45, 75],      // seconds before it gives up and crawls off
     stun: 0.6,              // seconds a broom hit stops it
     killMana: 0.12,         // mana she gets back for each one she kills

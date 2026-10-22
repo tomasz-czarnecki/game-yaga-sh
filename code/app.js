@@ -1376,41 +1376,47 @@ function bugTarget(it, exit = null) {
   }
   return new THREE.Vector3(p.x, 0, p.z);
 }
-/* ───────────── hostile bugs: the ones that bite ───────────── */
+/* ───────────── the monsters: big red bugs. They wander calmly until she hits one; then it turns on her and bites.
+   (hostile.aggressive in settings.js makes them hunt the hens and her on their own.) ───────────── */
 const HOSTILE = { ...SET.hostile, reach: BODY_R + 0.15 };
 const hostileBugs = () => world.items.filter((i) => i.hostile);
 const FOE_RED = new THREE.Color(0xB32A1F);
-/** A bug that crawls out of the dirt, bigger and red-glowing, and goes straight for her. */
+/** The monster turns angry: it chases her at its own speed and bites. */
+function anger(it) {
+  it.angry = true; it.walk.base = HOSTILE.speed;
+}
+/** A bug that crawls out of the dirt, bigger and red-glowing. Calm and wandering, or angry from the start in aggressive mode. */
 function spawnHostile(kind = pick(HOSTILE.kinds)) {
   const it = spawnSprout(false, kind);
   if (!it) return null;
   Object.assign(it, { hostile: true, hp: HOSTILE.hp, biteAt: 1, life: rand(...HOSTILE.stayFor), stun: 0, flash: 0, glow: [] });
-  it.s0 *= HOSTILE.size; it.walk.base = HOSTILE.speed; it.walk.exit = null;
+  it.s0 *= HOSTILE.size; it.walk.exit = null; it.walk.goal = bugTarget(it);
   it.root.traverse((o) => {                             // its own materials, so the red glow stays on this bug
     if (!o.isMesh || !o.material.emissive) return;
     o.material = o.material.clone(); o.material.emissive = FOE_RED.clone(); o.material.emissiveIntensity = 0.6;
     it.glow.push(o.material);
   });
-  say('foe', { cool: 25 });
+  if (HOSTILE.aggressive) { anger(it); say('foe', { cool: 25 }); } else say('foeCalm', { cool: 25 });
   return it;
 }
-/** What a hostile bug goes for: the nearest hen, unless she is right beside it; her once the flock is gone. */
+/** What an angry monster goes for: her. In aggressive mode the nearest hen, unless she is right beside it; her once the flock is gone. */
 function foeTarget(it) {
   const p = it.root.position;
   let hen = null, best = Infinity;
-  for (const h of world.hens) { const d = Math.hypot(h.root.position.x - p.x, h.root.position.z - p.z); if (d < best) { best = d; hen = h; } }
+  for (const h of HOSTILE.aggressive ? world.hens : []) { const d = Math.hypot(h.root.position.x - p.x, h.root.position.z - p.z); if (d < best) { best = d; hen = h; } }
   if (hen && Math.hypot(pet.pos.x - p.x, pet.pos.z - p.z) > HOSTILE.herRange) return { x: hen.root.position.x, z: hen.root.position.z, reach: HOSTILE.henReach, hen };
   return { x: pet.pos.x, z: pet.pos.z, reach: HOSTILE.reach };
 }
 /** A hostile bug gives up and crawls off the edge of the field. */
 function sendOff(it) {
   const p = it.root.position, sp = spanAt(p.z);
-  it.hostile = false; it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
+  it.hostile = it.angry = false; it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
 }
-/** A hostile bug next to its target (a hen or her) bites, every so often. A fresh hit stuns it and flashes it white for a moment. */
+/** An angry monster next to its target bites, every so often. A fresh hit stuns it and flashes it white for a moment; a calm one only gets the flash. */
 function tickBite(it, dt) {
   it.stun = Math.max(0, it.stun - dt);
   if (it.flash > 0) { it.flash -= dt; for (const m of it.glow) m.emissiveIntensity = it.flash > 0 ? 2.2 : 0.6; }
+  if (!it.angry) return;
   it.biteAt -= dt;
   if (it.biteAt > 0 || it.stun > 0 || it.state !== 'rest' || it.grow < 1) return;
   const p = it.root.position, tgt = foeTarget(it);
@@ -1484,6 +1490,7 @@ function strike(f) {
   f.hp -= SWING.dmg; f.stun = HOSTILE.stun; f.flash = 0.12; Sound.hit();
   const s = resolveSpot(p.x + (dx / d) * 0.45, p.z + (dz / d) * 0.45); p.x = s.x; p.z = s.z;
   if (f.hp <= 0) killFoe(f);
+  else if (!f.angry) { anger(f); say('foeAngry', { cool: 8 }); }      // she hit it, so it hits back
 }
 function killFoe(f) {
   const s = screenOf(f.root.position.clone().setY(f.root.position.y + 0.3));
@@ -1550,10 +1557,10 @@ function layEgg(h) {
   root.traverse((o) => { o.userData.egg = egg; });
   scene.add(root); world.eggs.push(egg); Sound.plop();
 }
-/** The hostile bug she should deal with: one in broom reach, or one at a hen near enough to run to. */
+/** The angry monster she should deal with: one in broom reach, or one at a hen near enough to run to. */
 function foeToDefend() {
   let best = null, bestD = Infinity;
-  for (const f of hostileBugs()) {
+  for (const f of hostileBugs().filter((m) => m.angry)) {
     const fp = f.root.position, d = Math.hypot(fp.x - pet.pos.x, fp.z - pet.pos.z);
     const atHen = world.hens.some((h) => Math.hypot(h.root.position.x - fp.x, h.root.position.z - fp.z) < 3);
     if (f.grow >= 1 && d < bestD && (d < SWING.reach || (atHen && d < 9))) { best = f; bestD = d; }
@@ -1718,7 +1725,7 @@ function tickBug(it, dt) {
   else if (w && live && it.state === 'rest' && it.grow >= 1) {
     const dPet = Math.hypot(p.x - pet.pos.x, p.z - pet.pos.z) || 1e-3;
     const scared = !it.hostile && dPet < BUG_FEAR && !pet.want.asleep && brain.mode !== 'sleep';
-    const tgt = it.hostile ? foeTarget(it) : null;
+    const tgt = it.angry ? foeTarget(it) : null;
     if (tgt) {                                           // always after its target, round the pond and cliffs; it stops only to bite
       if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, tgt.x, tgt.z); it.pathT = 0.25; }
       w.rest = Math.hypot(p.x - tgt.x, p.z - tgt.z) < tgt.reach || it.stun > 0 ? 1 : 0;
@@ -1752,9 +1759,9 @@ function tickBug(it, dt) {
           vanish(it, 0, 0); return;
         }
       } else if (it.life != null && (it.life -= dt) < 0 && !it.claimed) {
-        it.hostile = false;                                  // a hostile bug that has had enough crawls off like the others
+        it.hostile = it.angry = false;                       // a monster that has had enough crawls off like the others
         w.exit = p.x < (spanAt(p.z).x0 + spanAt(p.z).x1) / 2 ? -1 : 1; w.goal = bugTarget(it, w.exit);
-      } else if (!it.hostile && (gd < 0.4 || Math.random() < dt * 0.05)) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
+      } else if (!it.angry && (gd < 0.4 || Math.random() < dt * 0.05)) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
       const k = clamp(w.v / Math.max(w.base, 0.2), 0, 1.8);
       a = 0.35 + 0.65 * Math.min(1, k); adv = dt * (0.5 + 0.7 * k);
     }
