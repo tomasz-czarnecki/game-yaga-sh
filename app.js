@@ -1076,7 +1076,7 @@ function buildHouse() {
   // ladder from the door to the ground
   const ladder = new THREE.Group(); ladder.position.set(0, 0, 1.45); root.add(ladder);
   const tilt = Math.atan2(1.0, 1.75), len = Math.hypot(1.0, 1.75);
-  [-0.3, 0.3].forEach((x) => add(ladder, new THREE.BoxGeometry(0.07, len, 0.07), M.dark, x, 0.875, 0.5, tilt, 0, 0));
+  [-0.3, 0.3].forEach((x) => add(ladder, new THREE.BoxGeometry(0.07, len, 0.07), M.dark, x, 0.875, 0.5, -tilt, 0, 0));   // leaning in: top at the door
   for (let i = 1; i < 6; i++) { const k = i / 6; add(ladder, new THREE.BoxGeometry(0.6, 0.05, 0.08), M.logB, 0, 1.75 * (1 - k), 1.0 * k); }
 
   const glow = new THREE.PointLight(0xE9B65A, 0, 9, 1.8); glow.position.set(0, 3.0, 2.2); root.add(glow);
