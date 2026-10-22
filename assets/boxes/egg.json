@@ -1,0 +1,10 @@
+{
+  "about": "An egg standing on the ground at the origin. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. A sphere is stretched to the given size.",
+  "defaults": { "roughness": 0.7, "glow": 0.12 },
+  "materials": {
+    "shell": { "colour": "#F0EADC" }
+  },
+  "boxes": [
+    { "note": "egg", "shape": "sphere", "size": [0.17, 0.23, 0.17], "material": "shell", "at": [0, 0.1, 0] }
+  ]
+}

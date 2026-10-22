@@ -10,6 +10,7 @@ import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
 import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
 import SET from '../settings.js';
 import { makeChicken, makeEgg } from './chickens.js';
+import { loadBoxModels } from './box-model.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -842,10 +843,11 @@ async function boot() {
 
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
-  const [yaga, worldJson, wordsJson, ...loaded] = await Promise.all([
+  const [yaga, worldJson, wordsJson, , ...loaded] = await Promise.all([
     loader.loadAsync('./assets/models/pani-yaga-dressed.glb'),
     fetch('./assets/worlds/home.json').then((r) => r.json()),
     fetch('./words/en.json').then((r) => r.json()),
+    loadBoxModels(['hen', 'egg', 'pumpkin', 'cabbage', 'shovel']),   // kept in box-model.js, built by name
     ...files.map((f) => loader.loadAsync(`./assets/models/${f}.glb`)),
   ]);
   useWords(wordsJson); labelPage();

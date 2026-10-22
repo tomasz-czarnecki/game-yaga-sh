@@ -1,0 +1,41 @@
+{
+  "about": "A pumpkin at three growth stages (sprout, young, ripe), standing on the ground at the origin; a farm block is 0.5 m wide. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. The two turned orange boxes make a round pumpkin.",
+  "defaults": { "roughness": 0.8, "glow": 0.05 },
+  "materials": {
+    "leaf": { "colour": "#587a35" },
+    "leafLight": { "colour": "#7f9f4c" },
+    "stem": { "colour": "#4b5632" },
+    "orange": { "colour": "#d2762a" },
+    "orangeDark": { "colour": "#b85f1f" }
+  },
+  "stages": [
+    {
+      "boxes": [
+        { "note": "stem", "size": [0.03, 0.1, 0.03], "material": "stem", "at": [0, 0.05, 0] },
+        { "note": "leaf", "size": [0.12, 0.02, 0.06], "material": "leaf", "at": [0.0553, 0.1, 0.0234], "turn": [0, -22.92, 0] },
+        { "note": "leaf", "size": [0.12, 0.02, 0.06], "material": "leaf", "at": [-0.0553, 0.1, -0.0234], "turn": [0, -202.92, 0] }
+      ]
+    },
+    {
+      "boxes": [
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [0.0921, 0.06, 0.0389], "turn": [0, -22.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [-0.0389, 0.06, 0.0921], "turn": [0, -112.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [-0.0921, 0.06, -0.0389], "turn": [0, -202.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [0.0389, 0.06, -0.0921], "turn": [0, -292.92, 0] },
+        { "note": "bulb", "size": [0.12, 0.1, 0.12], "material": "leafLight", "at": [0, 0.06, 0] },
+        { "note": "stem", "size": [0.03, 0.06, 0.03], "material": "stem", "at": [0, 0.13, 0] }
+      ]
+    },
+    {
+      "boxes": [
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [0.0921, 0.04, 0.0389], "turn": [0, -22.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [-0.0389, 0.04, 0.0921], "turn": [0, -112.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [-0.0921, 0.04, -0.0389], "turn": [0, -202.92, 0] },
+        { "note": "leaf", "size": [0.2, 0.02, 0.1], "material": "leaf", "at": [0.0389, 0.04, -0.0921], "turn": [0, -292.92, 0] },
+        { "note": "pumpkin", "size": [0.3, 0.2, 0.3], "material": "orange", "at": [0, 0.12, 0] },
+        { "note": "pumpkin, turned", "size": [0.3, 0.2, 0.3], "material": "orangeDark", "at": [0, 0.12, 0], "turn": [0, 45, 0] },
+        { "note": "stem", "size": [0.05, 0.09, 0.05], "material": "stem", "at": [0, 0.27, 0] }
+      ]
+    }
+  ]
+}

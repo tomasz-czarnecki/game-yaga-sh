@@ -1,0 +1,24 @@
+{
+  "about": "A spade about 1.5 m long: the grip is at the origin (her fist), the blade points down (-y), the handle top is up (+y). Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. The code lights the materials at night, so keep their names.",
+  "defaults": { "roughness": 0.8, "glow": 0.04 },
+  "materials": {
+    "wood": { "colour": "#6b4532" },
+    "iron": { "colour": "#56585c", "metalness": 0.3 },
+    "edge": { "colour": "#8a8d92", "metalness": 0.4 }
+  },
+  "boxes": [
+    { "note": "shaft", "size": [0.045, 1.05, 0.045], "material": "wood", "at": [0, -0.105, 0] },
+    { "note": "handle bar", "size": [0.26, 0.045, 0.045], "material": "wood", "at": [0, 0.4, 0] },
+    { "note": "handle upright", "size": [0.04, 0.11, 0.04], "material": "wood", "at": [-0.11, 0.34, 0] },
+    { "note": "handle upright", "size": [0.04, 0.11, 0.04], "material": "wood", "at": [0.11, 0.34, 0] }
+  ],
+  "parts": {
+    "blade": {
+      "boxes": [
+        { "note": "collar", "size": [0.08, 0.1, 0.08], "material": "iron", "at": [0, -0.65, 0] },
+        { "note": "blade", "size": [0.27, 0.3, 0.025], "material": "iron", "at": [0, -0.84, 0] },
+        { "note": "tip", "size": [0.17, 0.1, 0.025], "material": "edge", "at": [0, -1.04, 0] }
+      ]
+    }
+  }
+}

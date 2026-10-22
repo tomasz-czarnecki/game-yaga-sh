@@ -1,0 +1,54 @@
+{
+  "about": "A hen about 0.45 m long, facing +z, standing on the ground at the origin. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. The code swings the parts called body, head, tail, legL and legR, so keep those names. 'variants' are the hens' feather colours, one per hen.",
+  "defaults": { "roughness": 0.85, "glow": 0.05 },
+  "materials": {
+    "feather": { "colour": "#E9DFC8" },
+    "dark": { "colour": "#2a241f" },
+    "gold": { "colour": "#D6A446" },
+    "red": { "colour": "#B32A1F" }
+  },
+  "variants": [{ "feather": "#E9DFC8" }, { "feather": "#8A5A3A" }, { "feather": "#6c6a6b" }],
+  "parts": {
+    "body": {
+      "at": [0, 0.27, 0],
+      "boxes": [
+        { "note": "body", "size": [0.26, 0.24, 0.34], "material": "feather", "at": [0, 0, 0] },
+        { "note": "wing", "size": [0.04, 0.16, 0.22], "material": "feather", "at": [0.14, 0, 0] },
+        { "note": "wing", "size": [0.04, 0.16, 0.22], "material": "feather", "at": [-0.14, 0, 0] }
+      ],
+      "parts": {
+        "tail": {
+          "at": [0, 0.08, -0.17],
+          "boxes": [
+            { "note": "tail, leaning back", "size": [0.06, 0.2, 0.14], "material": "feather", "at": [0, 0.08, -0.03], "turn": [-28.65, 0, 0] }
+          ]
+        },
+        "head": {
+          "at": [0, 0.14, 0.16],
+          "boxes": [
+            { "note": "head", "size": [0.14, 0.15, 0.14], "material": "feather", "at": [0, 0.08, 0.04] },
+            { "note": "beak", "size": [0.06, 0.04, 0.08], "material": "gold", "at": [0, 0.07, 0.14] },
+            { "note": "comb", "size": [0.04, 0.06, 0.1], "material": "red", "at": [0, 0.18, 0.03] },
+            { "note": "wattle", "size": [0.03, 0.05, 0.03], "material": "red", "at": [0, 0.01, 0.1] },
+            { "note": "eye", "size": [0.025, 0.025, 0.02], "material": "dark", "at": [0.075, 0.11, 0.08] },
+            { "note": "eye", "size": [0.025, 0.025, 0.02], "material": "dark", "at": [-0.075, 0.11, 0.08] }
+          ]
+        }
+      }
+    },
+    "legL": {
+      "at": [-0.06, 0.16, 0],
+      "boxes": [
+        { "note": "leg", "size": [0.03, 0.16, 0.03], "material": "gold", "at": [0, -0.08, 0] },
+        { "note": "foot", "size": [0.07, 0.02, 0.1], "material": "gold", "at": [0, -0.16, 0.03] }
+      ]
+    },
+    "legR": {
+      "at": [0.06, 0.16, 0],
+      "boxes": [
+        { "note": "leg", "size": [0.03, 0.16, 0.03], "material": "gold", "at": [0, -0.08, 0] },
+        { "note": "foot", "size": [0.07, 0.02, 0.1], "material": "gold", "at": [0, -0.16, 0.03] }
+      ]
+    }
+  }
+}

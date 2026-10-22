@@ -1,0 +1,31 @@
+{
+  "about": "A cabbage at three growth stages (sprout, young, ripe), standing on the ground at the origin; a farm block is 0.5 m wide. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you.",
+  "defaults": { "roughness": 0.8, "glow": 0.05 },
+  "materials": {
+    "leaf": { "colour": "#587a35" },
+    "leafLight": { "colour": "#7f9f4c" },
+    "head": { "colour": "#9cba62" },
+    "heart": { "colour": "#c2d98a" }
+  },
+  "stages": [
+    {
+      "boxes": [
+        { "note": "sprout", "size": [0.08, 0.06, 0.08], "material": "leafLight", "at": [0, 0.03, 0] }
+      ]
+    },
+    {
+      "boxes": [
+        { "note": "outer leaves", "size": [0.26, 0.02, 0.26], "material": "leaf", "at": [0, 0.03, 0] },
+        { "note": "head", "size": [0.16, 0.12, 0.16], "material": "leafLight", "at": [0, 0.1, 0] }
+      ]
+    },
+    {
+      "boxes": [
+        { "note": "outer leaves", "size": [0.36, 0.04, 0.36], "material": "leaf", "at": [0, 0.03, 0] },
+        { "note": "head", "size": [0.3, 0.18, 0.3], "material": "leafLight", "at": [0, 0.14, 0] },
+        { "note": "head, upper", "size": [0.2, 0.12, 0.2], "material": "head", "at": [0, 0.27, 0] },
+        { "note": "heart", "size": [0.1, 0.05, 0.1], "material": "heart", "at": [0, 0.34, 0] }
+      ]
+    }
+  ]
+}
