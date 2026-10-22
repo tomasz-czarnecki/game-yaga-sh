@@ -6,7 +6,7 @@ import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
 import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
-import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
+import { SWING, makeShovel, attachInHand } from './tools.js';
 import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
 import SET from '../settings.js';
 import { makeChicken, makeEgg } from './chickens.js';
@@ -126,21 +126,22 @@ const DOUBLE_TAP = { ms: 350, px: 48 };    // a second ground tap this soon and 
 const FADE = 0.25;                        // animation crossfade, seconds
 
 class YagaPet {
-  constructor(gltf) {
+  constructor(gltf, broomGltf) {
     this.root = new THREE.Group();
     this.squash = new THREE.Group(); this.root.add(this.squash);
     this.squash.scale.setScalar(YAGA_H / 2.2);     // the game places her head at 2.2 × squash
     this.creature = new THREE.Group(); this.squash.add(this.creature);
     const model = gltf.scene; model.scale.setScalar(2.2 / MODEL_H); this.creature.add(model);
     this.mats = [];
-    model.traverse((o) => {
+    const glow = (root) => root.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
       // a soft self-light from her own texture, so she reads in the dark violet clearing
       o.material.emissiveMap = o.material.map; o.material.emissive = new THREE.Color(0xffffff);
       this.mats.push(o.material);
-      if (o.material.name === BROOM_MATERIAL) this.broom = o;
     });
+    glow(model);
+    this.broom = broomGltf.scene; glow(this.broom); attachInHand(model, this.broom);
     const shovel = makeShovel(); this.shovel = shovel.group; this.mats.push(...shovel.mats);
     attachInHand(model, this.shovel);
     this.holds(S.tool);
@@ -170,7 +171,7 @@ class YagaPet {
   get pos() { return this.root.position; }
   get airborne() { return !!this.hop; }
 
-  /** Shows the tool in her hand: the broom is part of her model, the shovel is a prop. */
+  /** Shows the tool in her hand: the broom and the shovel are both props on her right hand. */
   holds(tool) { this.broom.visible = tool === 'broom'; this.shovel.visible = tool === 'shovel'; }
 
   /** The brain's "hop": a short walk to (x, z). A big hop on the spot is a little celebration. */
@@ -843,8 +844,9 @@ async function boot() {
 
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
-  const [yaga, worldJson, wordsJson, , ...loaded] = await Promise.all([
+  const [yaga, broom, worldJson, wordsJson, , ...loaded] = await Promise.all([
     loader.loadAsync('./assets/models/yaga-dressed.glb'),
+    loader.loadAsync('./assets/models/broom.glb'),   // a prop in her hand, like the shovel
     fetch('./assets/worlds/home.json').then((r) => r.json()),
     fetch('./words/en.json').then((r) => r.json()),
     loadBoxModels(['hen', 'egg', 'pumpkin', 'cabbage', 'shovel']),   // kept in box-model.js, built by name
@@ -874,7 +876,7 @@ async function boot() {
   });
   for (const id of FOODS) world.models[id] = { make: () => makeBug(THREE, id), clips: [] };
 
-  pet = new YagaPet(yaga);
+  pet = new YagaPet(yaga, broom);
   pet.root.position.set(SPAWN.x, groundY(SPAWN.x, SPAWN.z), SPAWN.z);
   scene.add(pet.root);
   Box.pet = new BlackBox();

@@ -20,7 +20,7 @@ A small 3D farm game. Yaga, a witch whose hut stands on chicken legs, lives in a
 - `index.html`: all CSS and the HUD (stats, bug tray, clock, bottom hotbar with health/mana/stamina and the two tools). Its labels have no text of their own: `data-word`, `data-word-aria` and `data-word-alt` attributes point into `words/en.json`.
 - `settings.js`: the balance numbers (day length, how fast her bars move, what a meal gives, bugs, biters, broom, farming, hens), each with a note. Plain `export default`, so `//` comments work.
 - `words/en.json`: everything she, the Box and the screen say. One file per language (a Polish file would sit beside it).
-- `assets/models/`: her model (`yaga-dressed.glb`), the scenery (`environment.glb`) and the poo (`pupu.glb`). `assets/images/`: her portrait.
+- `assets/models/`: her model (`yaga-dressed.glb`: body, clothes, hair, skeleton and all animation clips), the broom she holds (`broom.glb`), the scenery (`environment.glb`) and the poo (`pupu.glb`). `assets/images/`: her portrait.
 - `assets/worlds/home.json`: the map (a text grid of types plus block heights, 0.5 m per cell). The format a future generator should write.
 - `assets/boxes/*.json`: the hen, egg, pumpkin, cabbage and shovel, as materials plus boxes (see "Box models" below).
 - `code/`: all JavaScript, plus `code/lib/` (three.js, vendored, untouched).
@@ -29,7 +29,7 @@ A small 3D farm game. Yaga, a witch whose hut stands on chicken legs, lives in a
   - `camera-rig.js`: the camera, from isometric (default) through zoom-out to a human close-up (mouse wheel).
   - `box-model.js`: builds the models in `assets/boxes/` (`loadBoxModels`, `buildBoxModel`).
   - `chickens.js`: animates the hen's named parts and makes the egg.
-  - `tools.js`: the shovel, where it sits in her hand (`GRIP`), and the broom swing.
+  - `tools.js`: how a prop sits in her hand (`GRIP`), the shovel, and the broom swing numbers.
   - `farm.js`: what the shovel can do (dig, plant, harvest, Grow spell), crop stages and growth times.
   - `bug-models.js`: the bugs. (They, the hut and the Box sidekick are still built in code, not from JSON.)
 - `tools/check_words.py`: run `uv run --no-project python tools/check_words.py` after touching `words/en.json` or adding a line key; it lists every key the code asks for that is missing.
@@ -42,6 +42,7 @@ A small 3D farm game. Yaga, a witch whose hut stands on chicken legs, lives in a
 - **Use `clock.t` timers, not `setTimeout`**, for game logic (`advance()` does not step `setTimeout`).
 - **Arrays like `world.hens` are replaced when something is removed.** Don't hold a reference to one across frames.
 - Her broom swing clip has a long text name (a prompt, not a label); it is looked up in `SWING.clip`.
+- **The broom and the shovel are props on her right-hand bone** (`attachInHand` + `GRIP` in `tools.js`), shown or hidden by the selected tool. A prop's origin is at the grip, handle up (+y), head down. `broom.glb` was cut out of her model in exactly that space, so a new body needs no broom baked in. If a new body's right-hand bone is oriented differently, `GRIP` has to be re-measured.
 - Timestamps that must survive a closed tab (crops) use `Date.now()`; the rest of the game uses `clock.t`.
 - **Paths:** `fetch`, `GLTFLoader`, `<script src>` and `<img>` paths resolve against `index.html` (`./assets/...`, `./words/en.json`); module `import`s resolve against the importing file (`./terrain.js`, `../settings.js`).
 - **Words:** never put text in the code. Add the line to `words/en.json` (same key the code uses with `say('key')`, `boxReact('key')` or `UI.key`), then run `tools/check_words.py`. Placeholders are `{n}`, `{bug}`, `{crave}` and the few listed in the checker. Only the `#oops` error text stays in code, because it must work when the words fail to load.
