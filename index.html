@@ -18,7 +18,6 @@
     --cream: #F0EADC;       /* the homepage ink */
     --gold: #D6A446;        /* the homepage gold: counts and alerts */
     --accent: #CF6E42;      /* the homepage terracotta */
-    --warn: #DE8053;        /* the homepage highlight: low stats */
     --hp: #C8442F;          /* health: the red of her hair and the hut's door trim */
     --mana: #6277D6;        /* mana: a dusk indigo */
     --stam: #86A24A;        /* stamina: moss, like her skirt */
@@ -44,7 +43,7 @@
   .vignette.hurt { animation: hurt 0.5s ease-out; }                    /* the screen edge flashes red when she is bitten */
   @keyframes hurt { from { box-shadow: inset 0 0 140px 30px rgba(200, 40, 30, 0.55); } to { box-shadow: inset 0 0 140px 30px rgba(200, 40, 30, 0); } }
 
-  /* left column: stats, then the bug tray under them (3×2) */
+  /* left column: her portrait, then the bug tray under it (3×2) */
   .side {
     position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px;
     display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
@@ -65,7 +64,6 @@
   .care:focus-visible, .round:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   .care canvas { width: 82%; height: 82%; display: block; pointer-events: none; }
   .care svg { width: 52%; height: 52%; display: block; pointer-events: none; }
-  .care.wanted { background: rgba(214, 164, 70, 0.22); border-color: var(--gold); animation: nudge 1.6s ease-in-out infinite; }
   .care.dim { opacity: 0.45; }
   .count {
     position: absolute; right: -4px; bottom: -4px; min-width: 20px; height: 20px; padding: 0 5px;
@@ -73,37 +71,17 @@
     font: 500 11px/20px var(--mono); font-variant-numeric: tabular-nums; text-align: center;
     box-shadow: 0 1px 0 rgba(0,0,0,0.25); pointer-events: none;
   }
-  @keyframes nudge { 0%, 100% { transform: translateY(0); } 12% { transform: translateY(-5px) rotate(-6deg); } 24% { transform: translateY(0) rotate(4deg); } 32% { transform: rotate(0); } }
 
-  /* her portrait, top left, beside the stats */
+  /* her portrait, top left */
   .head { display: flex; align-items: center; gap: 10px; }
   .portrait {
     width: 78px; height: 78px; flex: none; border-radius: 50%; object-fit: cover; pointer-events: none;
     background: var(--glass); border: 2px solid var(--accent); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   }
-  /* phones: the portrait and the day clock share the top row, so the stats drop their words and keep the bars */
-  @media (max-width: 640px) {
-    .portrait { width: 58px; height: 58px; } .head { gap: 8px; }
-    .stats .stat { grid-template-columns: 66px minmax(70px, 1fr); }
-    .stats .stat .val { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  }
+  /* phones: a smaller portrait, so the left column and the day clock fit the top row */
+  @media (max-width: 640px) { .portrait { width: 58px; height: 58px; } }
 
-  /* stats, top left: how full, how entertained */
-  .stats {
-    display: grid; gap: 9px; padding: 12px 14px; border-radius: 18px;
-    background: var(--glass); border: 1px solid var(--line);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
-  }
-  .stat { display: grid; grid-template-columns: 78px minmax(84px, 120px) 64px; align-items: center; gap: 10px; font: 500 11px/1 var(--mono); }
-  .stat .lbl { letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240, 234, 220, 0.72); }
-  .stat .bar { height: 8px; border-radius: 999px; background: rgba(240, 234, 220, 0.12); overflow: hidden; }
-  .stat .bar i { display: block; height: 100%; width: 50%; border-radius: inherit; background: var(--gold); transition: width 0.6s ease, background 0.3s ease; }
-  .stat .val { color: var(--cream); text-align: right; letter-spacing: 0.02em; }
-  .stat.low .bar i { background: var(--warn); animation: lowpulse 1.4s ease-in-out infinite; }
-  .stat.low .val { color: var(--warn); }
-  @keyframes lowpulse { 50% { opacity: 0.45; } }
-  @media (max-width: 600px) { .stat { grid-template-columns: 70px minmax(52px, 1fr) 58px; gap: 8px; } .stats { padding: 11px 12px; } }
 
   /* day clock, top right next to the sound button: one day every 5 minutes */
   .clock {
@@ -200,6 +178,7 @@
   .vital .bar { height: 10px; border-radius: 999px; background: rgba(240, 234, 220, 0.12); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
   .vital .bar i { display: block; height: 100%; width: 50%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 62%, #000), var(--c)); transition: width 0.25s ease; }
   .vital.low .bar i { animation: lowpulse 1.1s ease-in-out infinite; }
+  @keyframes lowpulse { 50% { opacity: 0.45; } }
   .tools { display: flex; gap: 8px; }
   .tool {
     position: relative; flex: none; width: var(--btn); height: var(--btn); padding: 0; border-radius: 16px;
@@ -218,7 +197,7 @@
   #saybox .d { background: var(--ink); border-color: var(--cream); box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
 
   @media (prefers-reduced-motion: reduce) {
-    .care.wanted, #bubble .cloud, #loading .box, #loading .bar.wait i, #say .gl, #saybox .gl { animation: none; }
+    #bubble .cloud, #loading .box, #loading .bar.wait i, #say .gl, #saybox .gl { animation: none; }
   }
 </style>
 
@@ -258,10 +237,6 @@
 <div class="side">
 <div class="head">
 <img class="portrait" src="assets/images/yaga-face.png" data-word-alt="portrait" width="256" height="256">
-<section class="stats" data-word-aria="stats">
-  <div class="stat" id="statHunger" role="meter" data-word-aria="hunger.aria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl" data-word="hunger.label"></span><span class="bar"><i></i></span><span class="val"></span></div>
-  <div class="stat" id="statJoy" role="meter" data-word-aria="joy.aria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl" data-word="joy.label"></span><span class="bar"><i></i></span><span class="val"></span></div>
-</section>
 </div>
 
 <div class="dock">

@@ -1,5 +1,5 @@
 // How the game plays: change a number, save, reload the page.
-// Times are in seconds. Her bars (hunger, joy, health, stamina, mana) run from 0 (empty) to 1 (full).
+// Times are in seconds. Her bars (health, stamina, mana) run from 0 (empty) to 1 (full).
 // Numbers that belong to a model or an animation (her size, her stride, the broom grip) stay in code/.
 export default {
 
@@ -14,34 +14,21 @@ export default {
     runPace: 0.8,           // the same for the run (double tap); the run clip is a sprint, so 0.8 is a jog
 
     // seconds a bar takes to go all the way: the bigger the number, the slower
-    hungerAwake: 480,       // fed → starving, while she is up
-    hungerAsleep: 1500,     // ...while she sleeps or naps
     staminaDrain: 700,      // full → empty, just by being up and about
     staminaRest: 90,        // empty → full, standing still
     staminaNap: 75,         // empty → full, asleep or napping
     manaRegain: 150,        // empty → full
-    joyAwake: 420,          // happy → sad if ignored, while she is up
-    joyAsleep: 1800,        // ...while she sleeps
-    healthStarving: 600,    // full → empty while she is very hungry
-    healthRecover: 200,     // empty → full while she is fed
-
-    cravesAbove: 0.55,      // hunger at which she starts craving a kind of bug
-    cravingEndsBelow: 0.25, // hunger at which the craving goes away
-
-    strokeJoy: 0.006,       // happiness each time you stroke her
+    healthRecover: 200,     // empty → full, on its own (only bites take health)
 
     // while the page is closed (up to 3 days): seconds for a bar to change by 1
-    awayHunger: 10800,      // hungrier
     awayStamina: 1200,      // more rested
     awayMana: 300,          // more mana
   },
 
-  // what a meal does: hunger it removes, happiness and health it adds
+  // health a meal from the farm gives back (eating a bug does nothing for now)
   food: {
-    craved: { hunger: 0.55, joy: 0.08 },                    // the bug she was craving
-    other: { hunger: 0.3, joy: 0.02 },                      // any other bug
-    harvest: { hunger: 0.3, joy: 0.06, health: 0.05 },      // a ripe crop
-    egg: { hunger: 0.18, joy: 0.05, health: 0.03 },         // an egg
+    harvest: 0.05,          // a ripe crop
+    egg: 0.03,              // an egg
   },
 
   bugs: {

@@ -206,15 +206,13 @@ class YagaPet {
     const w = this.want;
     switch (brain.mode) {
       case 'eat': return 'football_catch';
-      case 'refuse': return 'angry_01';
       case 'sleep': case 'nap': return w.asleep ? 'depressed' : 'angry_02';
       case 'react': return t - this.startleAt < 1.2 ? 'hit_to_body_01' : 'greet_01';
     }
     if (this.touch.on || t < brain.contentUntil) return 'agree';
     if (w.face === 'snarl') return 'angry_03';
     if (talking()) return 'complain_01';
-    if (S.hunger > 0.8 || S.health < 0.3) return 'frustrated_01';
-    if (S.joy < 0.18) return 'sob';
+    if (S.health < 0.3) return 'frustrated_01';
     if (w.face === 'oh' && w.look) return 'look_around';
     if (t - Talk.inputAt > BORED_AFTER) return BORED_CLIPS[Math.floor((t - Talk.inputAt - BORED_AFTER) / 9) % BORED_CLIPS.length];
     return 'idle';
@@ -759,8 +757,7 @@ const Sound = {
 
 /* ───────────── saved state ───────────── */
 const S = {
-  hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
-  eaten: Object.fromEntries(FOODS.map((f) => [f, 0])), meals: 0, crave: null, lastCrave: null,
+  energy: 0.85, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
   farm: [], flock: FLOCK, sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]; flock: hens alive
 };
 function load() {
@@ -773,25 +770,21 @@ function loadSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return;
     const d = JSON.parse(raw);
-    Object.assign(S, { hunger: d.hunger, energy: d.energy, joy: d.joy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, meals: d.meals | 0, crave: d.crave || null, sound: d.sound !== false });
-    if (d.eaten) Object.assign(S.eaten, d.eaten);
+    Object.assign(S, { energy: d.energy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, sound: d.sound !== false });
     S.farm = Array.isArray(d.farm) ? d.farm.slice(0, 300) : [];
     S.flock = clamp(d.flock ?? FLOCK, 0, FLOCK);
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
     S.away = away;
-    S.hunger = clamp((S.hunger ?? 0.5) + away / SET.her.awayHunger, 0, 0.95);
     S.energy = clamp((S.energy ?? 0.8) + away / SET.her.awayStamina, 0, 1);   // she rests while you're away
     S.mana = clamp(S.mana + away / SET.her.awayMana, 0, 1);
-    S.joy = clamp(S.joy ?? 0.5, 0, 1);
     S.health = clamp(S.health ?? 0.9, 0.15, 1);
-    if (!FOODS.includes(S.crave)) S.crave = null;
   }
 }
 function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
-      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, t: Date.now(),
+      energy: S.energy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, sound: Sound.on,
+      farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, t: Date.now(),
     }));
   } catch (e) { /* ignore */ }
 }
@@ -1268,7 +1261,6 @@ const BUG_MAX = SET.bugs.most;
 /** The bugs she can hunt and eat: hostile ones are enemies, not food. */
 function aliveBugs(kind) { return world.items.filter((i) => i.bug && !i.hostile && (!kind || i.kind === kind)); }
 function spawnKind() {
-  if (S.crave && !aliveBugs(S.crave).length && Math.random() < 0.6) return S.crave;
   const n = (k) => aliveBugs(k).length, min = Math.min(...FOODS.map(n));
   return Math.random() < 0.5 ? pick(FOODS.filter((k) => n(k) === min)) : pick(FOODS);   // keep the menu varied
 }
@@ -1319,10 +1311,6 @@ function dropFood(kind) {
   Sound.drop();
   brain.noticed = it; brain.noticeAt = clock.t;
   return it;
-}
-function foodLanded(it) {
-  // full up: it looks at the fruit and shakes its head
-  if (it.given && S.hunger < 0.08 && brain.mode === 'idle' && !pet.airborne) refuse(it);
 }
 /** A bug left far behind wanders off, so there are always some near her. */
 function recycleFarBug() {
@@ -1673,13 +1661,13 @@ function finishFarm(F) {
   if (F.act === 'plant') { plot.crop = F.crop; plot.at = Date.now(); showCrop(plot); say('planted', { force: true }); }
   if (F.act === 'harvest') {                              // the crop is food: she eats her harvest
     plot.crop = null; plot.at = 0; showCrop(plot); sparkleAt(F.x, F.z); Sound.yum();
-    feed(SET.food.harvest);
+    heal(SET.food.harvest);
     feedFlock(); say('harvest', { force: true });
   }
   if (F.act === 'egg') {                                  // an egg is food too
     scene.remove(F.egg.root); world.eggs = world.eggs.filter((e) => e !== F.egg);
     sparkleAt(F.x, F.z); Sound.yum();
-    feed(SET.food.egg);
+    heal(SET.food.egg);
     say('egg', { force: true });
   }
   if (F.act === 'grow') { plot.at = Date.now() - GROW.ripe * 1000; showCrop(plot); sparkleAt(F.x, F.z); Sound.chime(); say('grown', { force: true }); }
@@ -1772,7 +1760,7 @@ function tickProps(dt) {
       if (p.y <= gy) {
         p.y = gy; f.bounces++;
         if (f.bounces === 1) Sound.thud();
-        if (f.bounces >= 3 || Math.abs(f.vy) < 1.5) { it.state = 'rest'; if (it.bug) startWalk(it); foodLanded(it); }
+        if (f.bounces >= 3 || Math.abs(f.vy) < 1.5) { it.state = 'rest'; if (it.bug) startWalk(it); }
         else { f.vy = -f.vy * 0.34; f.vx *= 0.25; f.vz *= 0.25; f.spin *= 0.5; }
       }
     }
@@ -1794,7 +1782,7 @@ function tickProps(dt) {
 const clock = { t: 0 };
 const BUSY = ['eat', 'attack', 'farm'];     // modes she is not interrupted in
 const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, noticed: null, noticeAt: -9,
-  reactUntil: 0, contentUntil: 0, yawnAt: 8, lookAt: null, eatT: 0, celebrate: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
+  reactUntil: 0, contentUntil: 0, yawnAt: 8, eatT: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
   pokes: [], lastPoke: -99, grinUntil: 0 };
 
 function go(goal, purpose, urgent = false) {
@@ -1818,8 +1806,8 @@ function planHop() {
     }
   }
   const s = resolveSpot(lx, lz);
-  const happy = S.joy > 0.7 ? 0.12 : 0, tired = S.energy < 0.3 || S.hunger > 0.85 ? -0.12 : 0;
-  pet.startHop(s.x, s.z, { h: 0.42 + happy + tired + (brain.urgent ? 0.1 : 0) });
+  const tired = S.energy < 0.3 ? -0.12 : 0;
+  pet.startHop(s.x, s.z, { h: 0.42 + tired + (brain.urgent ? 0.1 : 0) });
   brain.hops++;
 }
 
@@ -1834,7 +1822,7 @@ function arrive() {
     brain.mode = 'idle'; brain.until = rand(2.5, 4); say(null, { force: true, text: pick(HOUSE_LINES) });
     setTimeout(() => boxReact('home', 0.6), 2600); return;
   }
-  if (pur === 'summon') { S.joy = clamp(S.joy + 0.03, 0, 1); brain.mode = 'idle'; brain.until = rand(1.5, 3.5); pet.faceTo = faceCamAngle(); return; }
+  if (pur === 'summon') { brain.mode = 'idle'; brain.until = rand(1.5, 3.5); pet.faceTo = faceCamAngle(); return; }
   brain.mode = 'idle'; brain.until = rand(1.2, 3.2);
   if (Math.random() < 0.7) pet.faceTo = faceCamAngle() + pick([-0.32, 0.32, 0]);
 }
@@ -1846,17 +1834,9 @@ function happyHop(big = false) {
 }
 
 function startEat(it) {
-  if (S.hunger < 0.08) return refuse(it);
   brain.mode = 'eat'; brain.eatT = 0; brain.food = it; it.claimed = true;
   pet.faceTo = Math.atan2(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z);
   it.from = it.root.position.clone();
-}
-
-function refuse(it) {
-  brain.mode = 'refuse'; brain.until = 1.1; brain.food = null;
-  if (it) { it.claimed = false; brain.lookAt = it.root.position.clone(); }
-  Sound.grumble();
-  say('full', { force: true, cool: 3 });
 }
 
 function poke() {
@@ -1871,7 +1851,6 @@ function poke() {
   brain.reactUntil = t + 0.8;
   pet.st.puffV += 9; pet.faceTo = faceCamAngle();
   const riled = brain.pokes.length >= 3;
-  S.joy = clamp(S.joy + (riled ? -0.04 : 0.06), 0, 1);
   Sound.squeak();
   if (!riled && Math.random() < 0.5) setTimeout(() => happyHop(Math.random() < 0.4), 180);
   pokeTalk();
@@ -1881,27 +1860,21 @@ function poke() {
 function tickBrain(dt) {
   const t = clock.t, w = pet.want, it = brain.food, HER = SET.her;
   // ── needs drift ──
-  const awake = brain.mode !== 'sleep' && brain.mode !== 'nap';
-  S.hunger = clamp(S.hunger + dt / (awake ? HER.hungerAwake : HER.hungerAsleep), 0, 1);
   const resting = brain.mode === 'idle' && !pet.airborne;      // stamina comes back when she stands still, and fast in a nap
   if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / HER.staminaNap, 0, 1);
   else S.energy = clamp(S.energy - dt / HER.staminaDrain + (resting ? dt / HER.staminaRest : 0), 0, 1);
   S.mana = clamp(S.mana + dt / HER.manaRegain, 0, 1);
-  S.joy = clamp(S.joy - dt / (awake ? HER.joyAwake : HER.joyAsleep), 0, 1);   // full → empty in ~7 min if ignored
-  S.health = clamp(S.health - (S.hunger > 0.85 ? dt / HER.healthStarving : 0) + (S.hunger < 0.7 ? dt / HER.healthRecover : 0), 0, 1);
-  if (!S.crave && S.hunger > HER.cravesAbove) { S.crave = pick(FOODS.filter((f) => f !== S.lastCrave)); refreshUI(); say('crave_' + S.crave, { cool: 4 }); }
-  if (S.crave && S.hunger < HER.cravingEndsBelow) { S.crave = null; refreshUI(); }
+  S.health = clamp(S.health + dt / HER.healthRecover, 0, 1);   // it comes back on its own; bites are what take it
 
   if (brain.mode === 'nap' && t > brain.napUntil) { brain.mode = 'idle'; brain.until = 1; pet.st.puffV += 5; }
 
   // ── defaults for the face: the expression follows the mood ──
   const sleepy = S.energy < 0.28;   // night or day: she keeps going, she just gets tired
-  let face = t < brain.grinUntil || S.joy > 0.7 ? 'grin' : 'smile';
-  if (S.hunger > 0.8 || S.joy < 0.18 || S.health < 0.3 || sleepy) face = 'grumpy';
-  let up = FACES[face].up, lo = FACES[face].lo, flap = 0, look = null, droop = 0.35 + S.hunger * 0.35, puff = (S.joy - 0.45) * 0.25, squat = 0, shake = 0;
+  let face = t < brain.grinUntil ? 'grin' : 'smile';
+  if (S.health < 0.3 || sleepy) face = 'grumpy';
+  let up = FACES[face].up, lo = FACES[face].lo, flap = 0, look = null, droop = 0.5, puff = 0, squat = 0, shake = 0;
   if (sleepy) { up = Math.min(up, 0.12); droop += 0.1; }
   if (S.health < 0.4) { up = Math.min(up, 0.25); droop += 0.15; }
-  if (S.hunger > 0.8) up = Math.min(up, 0.2);
   if (brain.noticed && t - brain.noticeAt < 2.2 && world.items.includes(brain.noticed)) {
     look = brain.noticed.root.position; up = 0.78;
     if (t - brain.noticeAt < 1.2) { face = 'oh'; lo = -0.8; }
@@ -1910,8 +1883,8 @@ function tickBrain(dt) {
   if (sleepy && t > brain.yawnAt && brain.mode === 'idle') { brain.yawnAt = t + rand(6, 10); brain.yawnUntil = t + 1.4; Sound.yawn(); }
   if (t < (brain.yawnUntil || 0)) { flap = 1.5 * Math.sin(clamp((brain.yawnUntil - t) / 1.4, 0, 1) * Math.PI); face = 'oh'; up = 0.02; lo = -0.3; }
 
-  // hungry, and someone dropped food: drop the stroll and go get it
-  if (!pet.airborne && S.hunger > 0.18 && (brain.mode === 'idle' || (brain.mode === 'travel' && brain.purpose === 'wander'))) {
+  // a bug she was sent for is free again (something interrupted her): go back for it
+  if (!pet.airborne && (brain.mode === 'idle' || (brain.mode === 'travel' && brain.purpose === 'wander'))) {
     const given = world.items.filter((i) => i.given && i.state === 'rest' && !i.claimed && i.grow >= 1);
     if (given.length) {
       const cost = (i) => i.root.position.distanceTo(pet.pos) + (i.given ? 0 : 4);
@@ -2015,7 +1988,7 @@ function tickBrain(dt) {
           it.root.scale.setScalar(it.s0 * (1 - 0.8 * k));
         }
       } else {
-        if (it && world.items.includes(it)) { vanish(it, 0, 0.1); eaten(it); }
+        if (it && world.items.includes(it)) { vanish(it, 0, 0.1); eaten(); }
         const c = (e - 0.62) / 0.3;
         flap = e < 1.52 ? -0.55 + 1.1 * (0.5 + 0.5 * Math.cos(c * Math.PI * 2)) : 0;
         if (e >= 1.52) face = 'grin';
@@ -2026,15 +1999,8 @@ function tickBrain(dt) {
         brain.lastChomp = -1;
         brain.mode = 'idle'; brain.until = rand(0.8, 1.6);
         pet.st.puffV += 6;
-        if (brain.celebrate > 0) { brain.celebrate = 0; brain.grinUntil = t + 2.6; Sound.chime(); happyHop(true); setTimeout(() => happyHop(), 700); say('yum_match', { force: true }); }
-        else { Sound.yum(); brain.grinUntil = t + 1.2; if (Math.random() < 0.6) say('yum', { force: true }); }
+        Sound.yum(); brain.grinUntil = t + 1.2; if (Math.random() < 0.6) say('yum', { force: true });
       }
-      break;
-    }
-    case 'refuse': {
-      brain.until -= dt; shake = brain.until > 0.3 ? 1 : 0; flap = 0; face = 'grumpy'; up = 0.12; lo = -0.5;
-      look = brain.lookAt || null;
-      if (brain.until <= 0) { brain.mode = 'idle'; brain.until = rand(1, 2); brain.lookAt = null; }
       break;
     }
     case 'react': {
@@ -2070,10 +2036,8 @@ function orderHunt(kind) {
   prey.sort((a, b) => a.root.position.distanceTo(pet.pos) - b.root.position.distanceTo(pet.pos));
   const it = prey[0];
   ring(it.root.position);
-  if (S.hunger < 0.08) return refuse(it);
   if (brain.food && brain.food !== it) brain.food.claimed = false;
-  if (S.crave && kind !== S.crave) say('wrong', { force: true, cool: 6, map: (l) => l.replace('{crave}', bugName(S.crave)) });
-  else say('hunt', { cool: 5 });
+  say('hunt', { cool: 5 });
   it.given = true;              // she treats it as "for me" from now on
   fetchFood(it, true);
 }
@@ -2082,20 +2046,14 @@ function fetchFood(it, urgent = true) {
   go(it.root.position.clone(), 'food', urgent);
 }
 
-/** A meal: takes the hunger off and adds the joy and health (the `food` numbers in settings.js). */
-function feed(g) {
-  S.hunger = clamp(S.hunger - g.hunger, 0, 1); S.joy = clamp(S.joy + g.joy, 0, 1); S.health = clamp(S.health + (g.health || 0), 0, 1);
+/** She ate a bug: for now it does nothing for her, the Box just has something to say about it. */
+function eaten() {
+  setTimeout(() => boxReact('eat', 0.5), 700);
+  refreshUI();
 }
 
-function eaten(it) {
-  S.eaten[it.kind] = (S.eaten[it.kind] || 0) + 1;
-  const match = S.crave === it.kind;
-  feed(match ? SET.food.craved : SET.food.other);   // food fixes hunger; happiness comes from attention
-  if (match) { S.lastCrave = S.crave; S.crave = null; brain.celebrate = 1; }
-  S.meals++;
-  setTimeout(() => boxReact('eat', 0.5), 700);
-  refreshUI(); save();
-}
+/** Food from the farm heals her a little (the `food` numbers in settings.js). */
+function heal(n) { S.health = clamp(S.health + n, 0, 1); }
 
 /* ───────────── talking: the homepage's typewriter cloud, in the pet's own voice ───────────── */
 function gibber() {
@@ -2164,9 +2122,7 @@ function tickTalk(t) {
     if (m === 'sleep' || m === 'nap') { if (Math.random() < 0.3) say(null, { text: UI.napPrefix + gibber(), gib: true }); }
     else if (m === 'idle' || m === 'travel') {
       if (t - Talk.inputAt > 25 && Talk.idleN < 3) { if (say('idle')) Talk.idleN++; }
-      else if (S.crave) say('crave_' + S.crave);
       else if (S.health < 0.35) say('sick');
-      else if (S.joy < 0.25) say('lonely');
       else if (S.energy < 0.28) say('sleepy');
       else if (Math.random() < 0.45) say(null, { text: gibber(), gib: true });
     }
@@ -2371,7 +2327,6 @@ function onDown(e) {
   if (hen) return petHen(hen);
   if (food) {
     if (brain.mode === 'sleep') return poke();
-    if (S.hunger < 0.08) return refuse(food);
     if (BUSY.includes(brain.mode)) return;
     if (brain.food && brain.food !== food) brain.food.claimed = false;
     ring(food.root.position); food.given = true;
@@ -2412,7 +2367,6 @@ function onMove(e) {
   touchAt(hp, vx, vy);
   if (ptr.moved > 14) {                    // stroking the fur
     brain.contentUntil = clock.t + 0.7;
-    S.joy = clamp(S.joy + SET.her.strokeJoy, 0, 1);
     if (now - ptr.heartAt > 380) { ptr.heartAt = now; heart(e.clientX, e.clientY); }
     if (now - ptr.purrAt > 300) { ptr.purrAt = now; Sound.purr(); }
     say('pet', { cool: 10 });
@@ -2505,10 +2459,8 @@ function currentNeed() {
   if (brain.mode === 'sleep' || brain.mode === 'nap') return null;
   if (brain.mode === 'eat') return null;
   if (S.energy < 0.28) return 'moon';
-  if (S.crave) return S.crave;
   return null;
 }
-const statEls = { hunger: $('#statHunger'), joy: $('#statJoy') };
 const vitalEls = { health: $('#vitalHealth'), mana: $('#vitalMana'), stamina: $('#vitalStamina') };
 const toolEls = [...document.querySelectorAll('.tool')];
 /** One bar of the bottom hotbar: the fill, the aria value, and a pulse when it runs low. */
@@ -2527,22 +2479,8 @@ function setTool(name) {
   if (S.tool === name) return;
   S.tool = name; showTool(); pet.holds(name); cellMark.visible = false; Sound.equip(); save();
 }
-function setStat(el, v, word) {
-  const pct = Math.round(clamp(v, 0, 1) * 100);
-  if (!el || (el._p === pct && el._w === word)) return;
-  el._p = pct; el._w = word;
-  el.querySelector('i').style.width = pct + '%';
-  el.querySelector('.val').textContent = word;
-  el.classList.toggle('low', v < 0.25);
-  el.setAttribute('aria-valuenow', String(pct));
-}
-/** Which of the five words (best first) a 0…1 stat gets. */
-const wordLevel = (v) => (v > 0.8 ? 0 : v > 0.55 ? 1 : v > 0.35 ? 2 : v > 0.15 ? 3 : 4);
 function tickStats() {
-  const full = 1 - S.hunger, j = S.joy;
-  setStat(statEls.hunger, full, UI.hunger.words[wordLevel(full)]);
   setVital(vitalEls.health, S.health); setVital(vitalEls.mana, S.mana); setVital(vitalEls.stamina, S.energy);
-  setStat(statEls.joy, j, UI.joy.words[wordLevel(j)]);
 }
 function tickHUD() {
   tickStats();
@@ -2578,14 +2516,13 @@ function tickHUD() {
 let trayShown = '';
 function tickTray() {
   const counts = FOODS.map((k) => aliveBugs(k).length);
-  const key = counts.join(',') + '|' + S.crave + S.night;
+  const key = counts.join(',') + '|' + S.night;
   if (key === trayShown) return;
   trayShown = key;
   document.querySelectorAll('.care.food').forEach((b) => {
     const n = counts[FOODS.indexOf(b.dataset.food)] || 0, bug = BUG[b.dataset.food];
     b.querySelector('.count').textContent = n;
     b.classList.toggle('dim', n === 0);
-    b.classList.toggle('wanted', S.crave === b.dataset.food && n > 0);
     b.setAttribute('aria-label', n ? fill(UI.trayHunt, { a: bug.a, n }) : fill(UI.trayNone, { plural: bug.plural }));
   });
 }

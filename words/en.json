@@ -20,36 +20,6 @@
       "gone {n} seconds. i counted.",
       "other tabs are prettier? fine."
     ],
-    "crave_ladybug": [
-      "ladybug. the spotty one. NOW.",
-      "i want the ladybug. 94% confidence.",
-      "seven spots. bring them."
-    ],
-    "crave_firefly": [
-      "firefly. the glowy one.",
-      "firefly. it's dark in my head.",
-      "firefly. now you see it. GO."
-    ],
-    "crave_caterpillar": [
-      "caterpillar. all of it.",
-      "one caterpillar. extra segments.",
-      "caterpillar. loop it into me."
-    ],
-    "crave_snail": [
-      "snail. take your time. it does.",
-      "snail please. slow food.",
-      "the snail. i'll wait. barely."
-    ],
-    "crave_ant": [
-      "ant. just one. there's never just one.",
-      "ant. small. fast. GO.",
-      "ants. the crunchy kind."
-    ],
-    "crave_beetle": [
-      "the shiny beetle. NOW.",
-      "beetle. the one that looks real.",
-      "jewel beetle or i #@%!ing riot."
-    ],
     "hunt": [
       "on it.",
       "target acquired.",
@@ -173,36 +143,15 @@
       "everything hurts. thanks for asking.",
       "i'm not dying. i'm buffering."
     ],
-    "lonely": [
-      "nobody visits the old witch anymore.",
-      "play with me. or don't. (do.)",
-      "entertainment levels: critical.",
-      "poke me. i dare you."
-    ],
     "escaped": [
       "it got away. #@%!.",
       "too slow. me, not it.",
       "that bug had places to be."
     ],
-    "wrong": [
-      "that's not a {crave}.",
-      "close. wrong. but close.",
-      "i said {crave}. read the bubble."
-    ],
-    "yum_match": [
-      "YES. exactly that. 100% match.",
-      "see? you CAN follow instructions.",
-      "prediction confirmed. delicious."
-    ],
     "yum": [
-      "not what i asked for. ate it anyway.",
+      "crunchy. ate it anyway.",
       "edible. 6/10.",
       "close enough. #@%!."
-    ],
-    "full": [
-      "full. 0% hungry. stop.",
-      "i'm a witch, not a bin.",
-      "no more. ever. (until later.)"
     ],
     "poke": [
       "ow.",
@@ -410,17 +359,6 @@
     "title": "Game · Yaga Labs",
     "stage": "Yaga and her black box in the clearing. Tap the ground to call her, tap her or the box to poke them, stroke her to pet her. They talk back, mostly to each other.",
     "portrait": "Yaga",
-    "stats": "How it's doing",
-    "hunger": {
-      "label": "Hunger",
-      "aria": "Hunger: how full it is",
-      "words": ["stuffed", "fed", "peckish", "hungry", "starving"]
-    },
-    "joy": {
-      "label": "Happiness",
-      "aria": "Happiness",
-      "words": ["thrilled", "happy", "fine", "bored", "miserable"]
-    },
     "tray": "Bugs out there: tap one to hunt it",
     "trayHunt": "Hunt {a} ({n} around)",
     "trayNone": "No {plural} around",

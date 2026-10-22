@@ -83,7 +83,7 @@ for bug in bug_ids:
             errors.append(f"bugs.{bug}.{field} missing")
 
 # placeholders must be ones the code fills in
-fills = {"n", "bug", "crave"}
+fills = {"n", "bug"}
 for table in (yaga, box):
     for key, lines in table.items():
         for line in lines:
