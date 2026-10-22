@@ -4,6 +4,7 @@
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
+import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint } from './terrain.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -20,12 +21,12 @@ const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 /* ───────────── world constants (from the original clearing) ───────────── */
 // the homepage palette: cream and terracotta by day; by night its dark brown (#1C1A17), lit by the tree lamp and stars
 const DAY = {
-  bg: '#e8dccb', ground: 0xa88a6e, exposure: 1.08, fog: [6, 40],
+  bg: '#e8dccb', ground: 0x5b4a3b, exposure: 1.08, fog: [6, 40],
   hemi: { sky: 0xfff1e0, ground: 0x5c4434, i: 1.5 },
   key: { c: 0xFFE2C2, i: 2.9 }, rim: { c: 0xF0B48A, i: 1.2 }, fill: { c: 0xD8A07C, i: 0.6 },
 };
 const NIGHT = {
-  bg: '#1C1A17', ground: 0x241e19, exposure: 1.05, fog: [4, 30],
+  bg: '#1C1A17', ground: 0x35291f, exposure: 1.05, fog: [4, 30],
   hemi: { sky: 0x8c7b68, ground: 0x0e0c0a, i: 0.8 },
   key: { c: 0xFFD6AE, i: 2.1 }, rim: { c: 0xCF6E42, i: 1.5 }, fill: { c: 0x5c3a28, i: 0.4 },
 };
@@ -49,8 +50,9 @@ const BUG_S = 2.6 * BUG_SIZE;             // bug-models units → world
 const BUG_TAP_R = 0.45;                   // world radius of a bug's invisible tap target, so small bugs stay easy to tap
 const BOX_S = 0.2;                        // the black box sidekick: creature units → world (ankle-high to her)
 const BODY_R = 0.86;                      // how close things may come to her (world units)
+const SPAWN = { x: 0.2, z: 1.2 };         // where she starts; the terrain's walkable area grows from here
 const TREE = { x: 3.25, z: -2.05 };
-const TREE_SCALE = 0.8;                   // the middle tree, a little smaller than in the original clearing
+const TREE_SCALE = 0.8;                  // the middle tree, a little smaller than in the original clearing
 const POO_SCALE = 0.6;                    // poo, smaller than the original
 const OBSTACLES = [
   { x: 3.25, z: -2.05, r: 0.55 * TREE_SCALE + BODY_R },
@@ -139,7 +141,7 @@ class YagaPet {
 
   /** The brain's "hop": a short walk to (x, z). A big hop on the spot is a little celebration. */
   startHop(x, z, o = {}) {
-    const from = this.root.position.clone(); from.y = 0;
+    const from = this.root.position.clone();
     const dist = Math.hypot(x - from.x, z - from.z);
     if (dist < 0.05) {
       if ((o.h ?? 0) >= 0.5) this.play(o.big ? 'dance_01' : 'greet_03', o.big ? 2.4 : 1.6);
@@ -195,9 +197,10 @@ class YagaPet {
     if (h) {
       h.t += dt;
       const k = Math.min(h.t / h.dur, 1);
-      pos.lerpVectors(h.from, h.to, k);
+      pos.x = lerp(h.from.x, h.to.x, k); pos.z = lerp(h.from.z, h.to.z, k);
       if (k >= 1) { this.hop = null; this.lastWalk = t; }
     }
+    pos.y = ease(pos.y, groundY(pos.x, pos.z), 14, dt);   // a block edge reads as a quick step up or down
     this.vel.subVectors(pos, this.prev).divideScalar(Math.max(dt, 1e-3));
 
     if (this.faceTo != null) this.heading += wrap(this.faceTo - this.heading) * (1 - Math.exp(-this.turnRate * 1.6 * dt));
@@ -541,9 +544,9 @@ class BlackBox {
   }
 
   startHop(x, z, o = {}) {
-    const from = this.root.position.clone(); from.y = 0;
+    const from = this.root.position.clone(); from.y = groundY(from.x, from.z);
     const dist = Math.hypot(x - from.x, z - from.z);
-    this.hop = { from, to: new THREE.Vector3(x, 0, z), t: 0, ant: o.ant ?? 0.16, dur: 0.36 + dist * 0.085,
+    this.hop = { from, to: new THREE.Vector3(x, groundY(x, z), z), t: 0, ant: o.ant ?? 0.16, dur: 0.36 + dist * 0.085,
       h: (o.h ?? 0.45) + dist * 0.1, launched: false, big: !!o.big };
     if (dist > 0.05) this.faceTo = Math.atan2(x - from.x, z - from.z);
   }
@@ -573,10 +576,10 @@ class BlackBox {
         const u = airU = (h.t - h.ant) / h.dur;
         const k = 0.7 * u + 0.3 * u * u * (3 - 2 * u);
         pos.x = lerp(h.from.x, h.to.x, k); pos.z = lerp(h.from.z, h.to.z, k);
-        pos.y = 4 * h.h * u * (1 - u);
+        pos.y = lerp(h.from.y, h.to.y, k) + 4 * h.h * u * (1 - u);
         hopSq = 0.13 * Math.sin(Math.min(u * 2.2, 1) * Math.PI / 2) * (1 - smooth(0.55, 1, u));
       } else {
-        pos.set(h.to.x, 0, h.to.z);
+        pos.copy(h.to);
         this.hop = null;
         st.landV = h.big ? -4.2 : -3.2; st.puffV += h.big ? 5 : 3.2;
         this.onLand && this.onLand(h);
@@ -787,17 +790,19 @@ async function boot() {
   scene.add(key); scene.add(key.target);
   const rim = new THREE.DirectionalLight(DAY.rim.c, DAY.rim.i); rim.position.set(4, 5.5, -9); scene.add(rim);
   const fill = new THREE.DirectionalLight(DAY.fill.c, DAY.fill.i); fill.position.set(9, 3, 4); scene.add(fill);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ color: DAY.ground, roughness: 0.95, metalness: 0 }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  world.lights = { hemi, key, rim, fill, ground };
+  world.lights = { hemi, key, rim, fill };
 
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
-  const [yaga, ...loaded] = await Promise.all([
+  const [yaga, worldJson, ...loaded] = await Promise.all([
     loader.loadAsync('./assets/pani-yaga-dressed.glb'),
+    fetch('./worlds/home.json').then((r) => r.json()),
     ...files.map((f) => loader.loadAsync(`./assets/${f}.glb`)),
   ]);
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+  loadWorld(worldJson, SPAWN);
+  world.terrain = terrainMeshes(); scene.add(world.terrain.group);
 
   const env = loaded[0].scene; dress(env);
   env.position.set(0.1, 0, -1.7);
@@ -817,10 +822,10 @@ async function boot() {
   for (const id of FOODS) world.models[id] = { make: () => makeBug(THREE, id), clips: [] };
 
   pet = new YagaPet(yaga);
-  pet.root.position.set(0.2, 0, 1.2);
+  pet.root.position.set(SPAWN.x, groundY(SPAWN.x, SPAWN.z), SPAWN.z);
   scene.add(pet.root);
   Box.pet = new BlackBox();
-  Box.pet.root.position.set(1.9, 0, 1.9);
+  Box.pet.root.position.set(1.9, groundY(1.9, 1.9), 1.9);
   scene.add(Box.pet.root);
 
   marker();
@@ -838,7 +843,7 @@ async function boot() {
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
   $('#loading').classList.add('gone');
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk };
+  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
@@ -892,13 +897,13 @@ function shrinkTree(env) {
 function buildScenery(env, tree) {
   world.landmarks = [{ x: TREE.x, z: TREE.z }, { x: 5.0, z: -2.0 }];
   for (const [x, z, k] of SCENERY.trees) {
-    const t = tree.clone(); t.position.set(x, 0, z); t.scale.setScalar(TREE_SCALE * k); t.rotation.y = rand(0, Math.PI * 2); scene.add(t);
+    const t = tree.clone(); t.position.set(x, groundY(x, z), z); t.scale.setScalar(TREE_SCALE * k); t.rotation.y = rand(0, Math.PI * 2); scene.add(t);
     OBSTACLES.push({ x, z, r: 0.55 * TREE_SCALE * k + BODY_R });
     world.landmarks.push({ x, z });
   }
   // the rock pair sits at (4.65, -2.15) and (5.45, -1.85) in the original clearing
   for (const [x, z] of SCENERY.rocks) {
-    const r = env.clone(); r.position.set(env.position.x + x - 4.65, 0, env.position.z + z + 2.15); scene.add(r);
+    const r = env.clone(); r.position.set(env.position.x + x - 4.65, groundY(x, z), env.position.z + z + 2.15); scene.add(r);
     OBSTACLES.push({ x, z, r: 1.0 + BODY_R }, { x: x + 0.8, z: z + 0.3, r: 0.8 + BODY_R });
     world.landmarks.push({ x, z });
   }
@@ -911,10 +916,12 @@ function buildDayNight(env) {
   world.sky = document.createElement('canvas');
   world.skyTex = new THREE.CanvasTexture(world.sky); world.skyTex.colorSpace = THREE.SRGBColorSpace;
   scene.background = world.skyTex;
+  // the terrain's vertex colours are day colours; at night they darken by the ratio the old flat ground did
+  const gd = C(DAY.ground), gn = C(NIGHT.ground);
   world.pal = {
     hemiSky: [C(DAY.hemi.sky), C(NIGHT.hemi.sky)], hemiGnd: [C(DAY.hemi.ground), C(NIGHT.hemi.ground)],
     key: [C(DAY.key.c), C(NIGHT.key.c)], rim: [C(DAY.rim.c), C(NIGHT.rim.c)], fill: [C(DAY.fill.c), C(NIGHT.fill.c)],
-    ground: [C(DAY.ground), C(NIGHT.ground)],
+    terrain: [C(0xffffff), new THREE.Color(gn.r / gd.r, gn.g / gd.g, gn.b / gd.b)],
   };
   world.glowMats = [];
   const glow = C(GLOW_COLOR), white = C(0xffffff);
@@ -976,7 +983,7 @@ function applyPhase(n) {
   L.key.color.copy(P.key[0]).lerp(P.key[1], n); L.key.intensity = lerp(DAY.key.i, NIGHT.key.i, sun);
   L.rim.color.copy(P.rim[0]).lerp(P.rim[1], n); L.rim.intensity = lerp(DAY.rim.i, NIGHT.rim.i, sun);
   L.fill.color.copy(P.fill[0]).lerp(P.fill[1], n); L.fill.intensity = lerp(DAY.fill.i, NIGHT.fill.i, sun);
-  L.ground.material.color.copy(P.ground[0]).lerp(P.ground[1], n);
+  for (const m of world.terrain.mats) m.color.copy(P.terrain[0]).lerp(P.terrain[1], n);
   renderer.toneMappingExposure = lerp(DAY.exposure, NIGHT.exposure, n);
   const g = Math.max(0, (n - 0.12) / 0.88), lit = g * g * (3 - 2 * g);
   const breathe = 1 + 0.07 * Math.sin(phase.cycleT * 1.15) + 0.045 * Math.sin(phase.cycleT * 2.9);
@@ -1148,7 +1155,7 @@ function clampXZ(x, z) {
   const A = area || ROAM; z = clamp(z, A.z0, A.z1);
   const sp = spanAt(z); return { x: clamp(x, sp.x0, sp.x1), z };
 }
-function blocked(x, z, pad = 0.05) { return OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad); }
+function blocked(x, z, pad = 0.05) { return OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad) || !walkable(x, z); }
 function resolveSpot(x, z) {
   for (let i = 0; i < 5; i++) {
     for (const o of OBSTACLES) {
@@ -1158,7 +1165,7 @@ function resolveSpot(x, z) {
     const c = clampXZ(x, z); x = c.x; z = c.z;
     if (!blocked(x, z)) break;
   }
-  return { x, z };
+  return blocked(x, z) ? nearest(x, z, (a, b) => !blocked(a, b)) : { x, z };   // water or a cliff: the nearest cell she can stand on
 }
 function segNear(ax, az, bx, bz, o) {
   const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
@@ -1180,14 +1187,14 @@ function resize() {
   else { camera.position.copy(aim).add(world.camOff); camera.lookAt(aim); camera.updateMatrixWorld(); }
   paintSky(W, H);
   computeArea();
-  if (pet) { const c = resolveSpot(pet.pos.x, pet.pos.z); if (!pet.airborne) pet.pos.set(c.x, 0, c.z); }
+  if (pet) { const c = resolveSpot(pet.pos.x, pet.pos.z); if (!pet.airborne) pet.pos.set(c.x, pet.pos.y, c.z); }
 }
 
 /** Eases the camera after her (k: 0…1 of the way this frame); the key light and its shadow box come along. */
 function followCamera(k) {
   const tx = clamp(pet.pos.x, ROAM.x0 + 7, ROAM.x1 - 7);
   const tz = clamp(pet.pos.z, ROAM.z0 + 4, ROAM.z1 - 4);
-  aim.x = lerp(aim.x, tx, k); aim.z = lerp(aim.z, tz, k);
+  aim.x = lerp(aim.x, tx, k); aim.z = lerp(aim.z, tz, k); aim.y = lerp(aim.y, ISO.aimY + pet.pos.y, k);
   camera.position.copy(aim).add(world.camOff);
   camera.lookAt(aim); camera.updateMatrixWorld();
   const L = world.lights;
@@ -1237,7 +1244,7 @@ function spawnSprout(instant = false, kind = null) {
     if (blocked(x, z, 0.5) || !clearOfItems(x, z, 2.0) || Math.hypot(x - pet.pos.x, z - pet.pos.z) < 2.4) continue;
     const it = cloneProp(kind || spawnKind());
     it.given = false;
-    it.root.position.set(x, instant ? 0 : -0.3, z); it.root.rotation.y = cross ? (side < 0 ? Math.PI / 2 : -Math.PI / 2) : rand(0, Math.PI * 2);
+    it.root.position.set(x, groundY(x, z) + (instant ? 0 : -0.3), z); it.root.rotation.y = cross ? (side < 0 ? Math.PI / 2 : -Math.PI / 2) : rand(0, Math.PI * 2);
     if (it.bug) { startWalk(it, cross ? -side : null); it.life = rand(60, 120); }
     it.s0 *= rand(0.9, 1.15); it.grow = instant ? 1 : 0; it.root.scale.setScalar(instant ? it.s0 : 0.001);
     scene.add(it.root); world.items.push(it);
@@ -1266,7 +1273,7 @@ function dropFood(kind) {
   it.given = true; it.state = 'fall';
   const land = landingSpot();
   const start = new THREE.Vector3(CANOPY.x + rand(-0.8, 0.8), CANOPY.y - 0.2, CANOPY.z + rand(-0.3, 0.5));
-  const T = Math.sqrt((2 * start.y) / 16);
+  const T = Math.sqrt((2 * (start.y - groundY(land.x, land.z))) / 16);
   it.fall = { vx: (land.x - start.x) / T, vz: (land.z - start.z) / T, vy: 0, bounces: 0, spin: rand(-8, 8) };
   it.root.position.copy(start); it.root.scale.setScalar(it.s0); it.grow = 1;
   scene.add(it.root); world.items.push(it);
@@ -1281,7 +1288,7 @@ function foodLanded(it) {
 function spawnPoop(x, z, instant = false) {
   const it = cloneProp('pupu');
   const s = resolveSpot(x, z);
-  it.root.position.set(s.x, instant ? 0 : -0.25, s.z); it.root.rotation.y = rand(-0.6, 0.6);
+  it.root.position.set(s.x, groundY(s.x, s.z) + (instant ? 0 : -0.25), s.z); it.root.rotation.y = rand(-0.6, 0.6);
   it.grow = instant ? 1 : 0; it.root.scale.setScalar(instant ? it.s0 : 0.001);
   scene.add(it.root); world.poops.push(it);
   refreshUI();
@@ -1341,7 +1348,8 @@ function tickBug(it, dt) {
       let nx = p.x + Math.sin(w.heading) * w.v * dt, nz = p.z + Math.cos(w.heading) * w.v * dt;
       if (w.exit == null) ({ x: nx, z: nz } = clampXZ(nx, nz));
       else { const A = area || ROAM; nz = clamp(nz, A.z0, A.z1); }
-      p.x = nx; p.z = nz; it.root.rotation.y = w.heading;
+      if (w.exit == null && !walkable(nx, nz)) { w.goal = bugTarget(it); nx = p.x; nz = p.z; }   // not into the pond: stay and look elsewhere
+      p.x = nx; p.z = nz; p.y = ease(p.y, groundY(nx, nz), 12, dt); it.root.rotation.y = w.heading;
       if (w.exit != null) {
         const sp = spanAt(p.z);
         if (p.x < sp.x0 - 0.5 || p.x > sp.x1 + 0.5) {        // made it across: off it goes
@@ -1375,13 +1383,14 @@ function tickProps(dt) {
       it.grow = Math.min(1, it.grow + dt / 0.7);
       const e = 1 - Math.pow(1 - it.grow, 3);
       it.root.scale.setScalar(it.s0 * Math.max(0.001, e) * (1 + 0.14 * Math.sin(it.grow * Math.PI)));
-      it.root.position.y = -0.3 * (1 - e);
+      it.root.position.y = groundY(it.root.position.x, it.root.position.z) - 0.3 * (1 - e);
     }
     if (it.state === 'fall') {
       const f = it.fall, p = it.root.position;
       f.vy -= 16 * dt; p.x += f.vx * dt; p.z += f.vz * dt; p.y += f.vy * dt; it.root.rotation.y += f.spin * dt;
-      if (p.y <= 0) {
-        p.y = 0; f.bounces++;
+      const gy = groundY(p.x, p.z);
+      if (p.y <= gy) {
+        p.y = gy; f.bounces++;
         if (f.bounces === 1) Sound.thud();
         if (f.bounces >= 3 || Math.abs(f.vy) < 1.5) { it.state = 'rest'; if (it.bug) startWalk(it); foodLanded(it); }
         else { f.vy = -f.vy * 0.34; f.vx *= 0.25; f.vz *= 0.25; f.spin *= 0.5; }
@@ -1413,7 +1422,7 @@ function go(goal, purpose, urgent = false) {
 }
 
 function planHop() {
-  const p = pet.pos, g = brain.goal;
+  const p = pet.pos, g = waypoint(p.x, p.z, brain.goal.x, brain.goal.z);   // round the pond and cliffs, not through them
   let dx = g.x - p.x, dz = g.z - p.z; const dist = Math.hypot(dx, dz) || 1e-3;
   let dirX = dx / dist, dirZ = dz / dist;
   const len = Math.min(dist, brain.urgent ? 1.7 : rand(1.0, 1.4));
@@ -1635,7 +1644,7 @@ function tickBrain(dt) {
       } else if (C.mound) {
         C.mk = ease(C.mk, C.kicks / 4, 3.5, dt);
         C.mound.scale.set(0.5 * (0.45 + 0.55 * C.mk), 0.32 * C.mk + 0.001, 0.5 * (0.45 + 0.55 * C.mk));
-        if (live) p.root.position.y = -0.42 * C.mk;
+        if (live) pp.y = groundY(pp.x, pp.z) - 0.42 * C.mk;
       }
       if (e < 0.8) {                                    // sniff, sniff
         look = pp; face = 'oh'; up = 0.66; lo = -0.72;
@@ -2015,8 +2024,8 @@ function tickBox(dt) {
     Box.pause -= dt;
     if (Box.pause <= 0 && (d > 2.3 || d < 0.8)) {      // keep to her side, a little towards us
       const side = dx >= 0 ? 1 : -1;
-      const goal = resolveSpot(y.x + side * 1.3, y.z + 0.6);
-      const gx = goal.x - b.pos.x, gz = goal.z - b.pos.z, gd = Math.hypot(gx, gz) || 1e-3;
+      const goal = resolveSpot(y.x + side * 1.3, y.z + 0.6), wp = waypoint(b.pos.x, b.pos.z, goal.x, goal.z);
+      const gx = wp.x - b.pos.x, gz = wp.z - b.pos.z, gd = Math.hypot(gx, gz) || 1e-3;
       const len = Math.min(gd, d > 6 ? 1.6 : 1.15);
       const s = resolveSpot(b.pos.x + (gx / gd) * len, b.pos.z + (gz / gd) * len);
       b.startHop(s.x, s.z, { h: 0.34 + (d > 6 ? 0.1 : 0) });
@@ -2033,7 +2042,7 @@ function tickBox(dt) {
   if (Box.dialog.length || boxTalking()) Talk.lock = Math.max(Talk.lock, t + 0.5);   // her idle chatter waits
 
   const face = t < Box.faceUntil ? Box.face : 'smile', F = FACES[face];
-  Box.look.set(y.x, YAGA_H * 0.85, y.z);
+  Box.look.set(y.x, y.y + YAGA_H * 0.85, y.z);
   Object.assign(w, { face, up: F.up, lo: F.lo, flap: boxFlap(t), look: Box.look, droop: 0.35, puff: face === 'grin' ? 0.15 : 0, squat: 0, shake: t < Box.shakeUntil ? 1 : 0 });
 }
 
@@ -2069,6 +2078,11 @@ function toNdc(e) {
   ray.setFromCamera(ndc, camera);
 }
 function hitPet() { const h = ray.intersectObject(pet.proxy, false); return h[0] || null; }
+/** Where the tap ray meets the terrain, nudged 5 cm into the face it hit so a tap on a cliff picks the column above. */
+function hitGround() {
+  const h = ray.intersectObject(world.terrain.solid, false)[0];
+  return h ? h.point.addScaledVector(h.face.normal, -0.05) : null;
+}
 function hitItem(list) {
   const hits = ray.intersectObjects(list.map((i) => i.root), true);
   if (!hits.length) return null;
@@ -2095,11 +2109,11 @@ function onDown(e) {
     ring(food.root.position); food.given = true;
     return fetchFood(food, true);
   }
-  const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+  const hit = hitGround();
   if (!hit) return;
   if (brain.mode === 'sleep') return poke();
   const s = resolveSpot(hit.x, hit.z);
-  ring(new THREE.Vector3(s.x, 0, s.z));
+  ring(new THREE.Vector3(s.x, groundY(s.x, s.z), s.z));
   if (['eat', 'poop', 'clean'].includes(brain.mode)) return;
   const now = performance.now(), run = now - ptr.groundAt < DOUBLE_TAP.ms && Math.hypot(e.clientX - ptr.groundX, e.clientY - ptr.groundY) < DOUBLE_TAP.px;
   Object.assign(ptr, { groundAt: run ? -1e9 : now, groundX: e.clientX, groundY: e.clientY });
@@ -2147,15 +2161,15 @@ const DIRT_MAT = new THREE.MeshStandardMaterial({ name: 'M_Dirt', color: 0x5a403
 const MOUND_MAT = new THREE.MeshStandardMaterial({ name: 'M_DirtMound', color: 0x4a3426, roughness: 1 });
 function kickDirt(target, C) {
   const back = C.away + Math.PI;                    // out from under its back end, toward the poo
-  const o = new THREE.Vector3(pet.pos.x + Math.sin(back) * BODY_R * 0.85, 0.12, pet.pos.z + Math.cos(back) * BODY_R * 0.85);
+  const o = new THREE.Vector3(pet.pos.x + Math.sin(back) * BODY_R * 0.85, pet.pos.y + 0.12, pet.pos.z + Math.cos(back) * BODY_R * 0.85);
   for (let i = 0; i < 8; i++) {
     const m = new THREE.Mesh(DIRT_GEO, DIRT_MAT); m.scale.setScalar(rand(0.045, 0.1)); m.position.copy(o); m.castShadow = true;
     m.rotation.set(rand(0, 6), rand(0, 6), 0); scene.add(m);
-    const T = rand(0.32, 0.5), tx = target.x + rand(-0.4, 0.4), tz = target.z + rand(-0.4, 0.4);
-    world.clods.push({ m, v: new THREE.Vector3((tx - o.x) / T, (0.5 * 16 * T * T - o.y) / T, (tz - o.z) / T), spin: rand(-12, 12), dead: 0 });
+    const T = rand(0.32, 0.5), tx = target.x + rand(-0.4, 0.4), tz = target.z + rand(-0.4, 0.4), gy = groundY(tx, tz);
+    world.clods.push({ m, v: new THREE.Vector3((tx - o.x) / T, (0.5 * 16 * T * T + gy - o.y) / T, (tz - o.z) / T), spin: rand(-12, 12), dead: 0, floor: gy + 0.02 });
   }
   if (!C.mound) {
-    C.mound = new THREE.Mesh(MOUND_GEO, MOUND_MAT); C.mound.position.set(target.x, 0, target.z);
+    C.mound = new THREE.Mesh(MOUND_GEO, MOUND_MAT); C.mound.position.set(target.x, groundY(target.x, target.z), target.z);
     C.mound.receiveShadow = true; C.mound.castShadow = true; C.mound.scale.set(0.2, 0.001, 0.2); scene.add(C.mound);
   }
 }
@@ -2163,7 +2177,7 @@ function tickClods(dt) {
   for (const c of world.clods) {
     if (c.dead) { c.dead += dt; c.m.scale.multiplyScalar(Math.max(0, 1 - dt * 5)); continue; }
     c.v.y -= 16 * dt; c.m.position.addScaledVector(c.v, dt); c.m.rotation.x += c.spin * dt;
-    if (c.m.position.y <= 0.02) { c.m.position.y = 0.02; c.dead = 1e-3; }
+    if (c.m.position.y <= c.floor) { c.m.position.y = c.floor; c.dead = 1e-3; }
   }
   for (const c of world.clods) if (c.dead > 0.45) scene.remove(c.m);
   world.clods = world.clods.filter((c) => c.dead <= 0.45);
@@ -2187,7 +2201,7 @@ function nextClean() {
 }
 function cleanPoop(p, quiet = false) {
   if (!world.poops.includes(p)) return;
-  const sp = screenOf(p.root.position.clone().setY(0.4));
+  const sp = screenOf(p.root.position.clone().setY(p.root.position.y + 0.4));
   vanish(p, 0, 0.8);
   sparkle(sp.x, sp.y);
   if (!quiet) { Sound.poof(); say('clean', { force: true, cool: 2 }); }
@@ -2204,7 +2218,7 @@ function marker() {
   markerMesh = new THREE.Mesh(new THREE.RingGeometry(0.26, 0.36, 40), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
   markerMesh.rotation.x = -Math.PI / 2; markerMesh.position.y = 0.02; markerMesh.visible = false; scene.add(markerMesh);
 }
-function ring(p) { markerMesh.position.set(p.x, 0.02, p.z); markerMesh.visible = true; markerLife = 0.9; }
+function ring(p) { markerMesh.position.set(p.x, p.y + 0.02, p.z); markerMesh.visible = true; markerLife = 0.9; }
 function tickMarker(dt) {
   if (markerLife <= 0) return;
   markerLife -= dt; const k = Math.max(0, markerLife / 0.9);
