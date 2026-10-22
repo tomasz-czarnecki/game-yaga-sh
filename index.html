@@ -144,9 +144,20 @@
   @keyframes drift { from { opacity: 0; translate: 0 0; scale: 0.5; } 20% { opacity: 1; } to { opacity: 0; translate: 36px -110px; scale: 1.3; } }
   @keyframes burst { from { opacity: 1; translate: 0 0; scale: 0.3; } to { opacity: 0; translate: var(--dx) var(--dy); scale: 1; rotate: 90deg; } }
 
-  #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--void); transition: opacity 0.6s ease; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; background: var(--void); transition: opacity 0.6s ease; }
   #loading .box { width: 64px; height: 64px; border-radius: 30%; background: #2a241f; box-shadow: 0 0 60px rgba(207,110,66,0.45); animation: breathe 1.4s ease-in-out infinite; }
   #loading.gone { opacity: 0; pointer-events: none; }
+  /* what is loading: the bar, the file now, the count, the last few that finished (code/loading.js fills them in) */
+  #loading .info { width: min(320px, calc(100% - 32px)); font: 500 12px/1.6 var(--mono); color: var(--cream); }
+  #loading .title { margin: 0 0 12px; font: 700 18px/1.2 var(--display); text-align: center; }
+  #loading .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  #loading .bar i { display: block; width: 0; height: 100%; background: var(--gold); transition: width 0.3s ease; }
+  #loading .bar.wait i { width: 35%; animation: shimmer 1.2s ease-in-out infinite; }   /* before the code runs: no numbers yet */
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  #loading .now { margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #loading .row { display: flex; justify-content: space-between; gap: 12px; margin: 0; }
+  #loading .tally, #loading .files { margin: 0; opacity: 0.55; }
+  #loading .files { min-height: 6.4em; margin-top: 6px; padding: 0; list-style: none; }
   @keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.08, 0.92) translateY(3px); } }
   #oops { position: fixed; inset: auto 16px 50% 16px; text-align: center; font: 700 18px/1.4 var(--display); }
 
@@ -202,7 +213,7 @@
   #saybox .d { background: var(--ink); border-color: var(--cream); box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
 
   @media (prefers-reduced-motion: reduce) {
-    .care.wanted, #bubble .cloud, #loading .box, #say .gl, #saybox .gl { animation: none; }
+    .care.wanted, #bubble .cloud, #loading .box, #loading .bar.wait i, #say .gl, #saybox .gl { animation: none; }
   }
 </style>
 
@@ -279,7 +290,18 @@
 
 <a class="home" href="https://yaga.sh/" data-word-aria="home"><span class="arrow">←</span><span class="txt" data-word="homeText"></span></a>
 
-<div id="loading" role="status" data-word-aria="loading"><div class="box"></div></div>
+<!-- the loading texts are written here, not in words/en.json: they show before the words have loaded -->
+<div id="loading" role="status" aria-label="Waking Yaga" data-word-aria="loading">
+  <div class="box"></div>
+  <div class="info" aria-hidden="true">
+    <p class="title">Waking Yaga</p>
+    <div class="bar wait"><i></i></div>
+    <p class="now">Loading the game code…</p>
+    <p class="row"><span class="size"></span><span class="pct"></span></p>
+    <p class="tally"></p>
+    <ol class="files"></ol>
+  </div>
+</div>
 
 <script type="module" src="./code/app.js"></script>
 

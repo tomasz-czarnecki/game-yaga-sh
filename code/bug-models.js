@@ -5,6 +5,8 @@
 // Units match the fruit GLBs (~0.4 long), y-up, resting on y = 0, head facing +z.
 // tick(t, a): idle/crawl animation; a = amplitude 0..1 (0 = rest pose, used for export).
 
+import { getJSON } from './loading.js';
+
 // the bugs by id; their names (and the in-joke each stands for) are in words/en.json, under "bugs"
 export const BUGS = ['ladybug', 'firefly', 'caterpillar', 'snail', 'ant', 'beetle'].map((id) => ({ id }));
 const LOOKS = {};
@@ -12,8 +14,7 @@ const LOOKS = {};
 /** Fetches each bug's colours and size from assets/models/enemies/<id>.json; call once at boot, before makeBug. */
 export async function loadBugLooks() {
   await Promise.all(BUGS.map(async ({ id }) => {
-    LOOKS[id] = await fetch(`./assets/models/enemies/${id}.json`).then((r) => r.json())
-      .catch((e) => { throw new Error(`assets/models/enemies/${id}.json: ${e.message}`); });   // say which file has the typo
+    LOOKS[id] = await getJSON(`./assets/models/enemies/${id}.json`);
   }));
 }
 

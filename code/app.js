@@ -11,6 +11,7 @@ import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
 import SET from '../settings.js';
 import { makeChicken, makeEgg } from './chickens.js';
 import { loadBoxModels } from './box-model.js';
+import { getJSON, loadGLB, building, hide } from './loading.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -21,8 +22,6 @@ const ease = (c, t, k, dt) => c + (t - c) * (1 - Math.exp(-k * dt));
 const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[(Math.random() * a.length) | 0];
-/** Fetches a JSON file; a typo in it names the file in the error. */
-const getJSON = (url) => fetch(url).then((r) => r.json()).catch((e) => { throw new Error(`${url}: ${e.message}`); });
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 
@@ -847,9 +846,10 @@ async function boot() {
 
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'], folder = { environment: 'environment', pupu: 'yaga' };
+  const mb = { environment: 0.3, pupu: 0.2 };                     // rough sizes of the models, only for the loading bar
   const [yaga, broom, worldJson, wordsJson, boxLook, houseLook, , , , ...loaded] = await Promise.all([
-    loader.loadAsync('./assets/models/yaga/yaga-dressed.glb'),
-    loader.loadAsync('./assets/models/tools/broom.glb'),   // a prop in her hand, like the shovel
+    loadGLB(loader, './assets/models/yaga/yaga-dressed.glb', 16.8),
+    loadGLB(loader, './assets/models/tools/broom.glb', 0.8),   // a prop in her hand, like the shovel
     getJSON('./assets/world/home.json'),
     getJSON('./words/en.json'),
     getJSON('./assets/models/box/box.json'),
@@ -857,8 +857,9 @@ async function boot() {
     loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel']),   // these three keep what they load in their own modules (the three empty slots above)
     loadBlocks(),
     loadBugLooks(),
-    ...files.map((f) => loader.loadAsync(`./assets/models/${folder[f]}/${f}.glb`)),
+    ...files.map((f) => loadGLB(loader, `./assets/models/${folder[f]}/${f}.glb`, mb[f])),
   ]);
+  await building();
   useWords(wordsJson); labelPage();
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
@@ -905,9 +906,9 @@ async function boot() {
   refreshUI();
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
-  $('#loading').classList.add('gone');
   window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, cleanPoop, spawnPoop, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
+  requestAnimationFrame(() => requestAnimationFrame(hide));   // fade the loading screen once her first frame is on screen
   setInterval(save, 4000);
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {
@@ -2911,7 +2912,7 @@ function start() {
 
 boot().catch((err) => {
   console.error(err);
-  $('#loading').classList.add('gone');
+  hide();
   const m = document.createElement('p'); m.id = 'oops';
   // these two texts stay here, not in words/en.json: they must work when the words (or any game file) fail to load
   m.textContent = err.message === 'WebGL2 required'

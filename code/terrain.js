@@ -2,6 +2,7 @@
 // generator writes too. How each kind of block looks is in assets/world/blocks/<kind>.json. One merged mesh holds every visible top and side; water is its own mesh.
 // Heights in the JSON count blocks of `step` metres; everything here works in world metres.
 import * as THREE from './lib/three.module.js';
+import { getJSON } from './loading.js';
 
 // The colours are dark fantasy, drawn from her clothes: umber earth, moss like her skirt, charcoal like her hoodie.
 // Dirt's top matches DAY.ground in app.js (the night tint is worked out from it).
@@ -10,8 +11,7 @@ let PALETTE, WATER;
 
 /** Fetches how each block looks; call at boot, before loadWorld. A new kind needs its file and a place in BLOCKS. */
 export async function loadBlocks() {
-  const read = (name) => fetch(`./assets/world/blocks/${name}.json`).then((r) => r.json())
-    .catch((e) => { throw new Error(`assets/world/blocks/${name}.json: ${e.message}`); });   // say which file has the typo
+  const read = (name) => getJSON(`./assets/world/blocks/${name}.json`);
   const [water, ...solid] = await Promise.all(['water', ...BLOCKS].map(read));
   PALETTE = Object.fromEntries(BLOCKS.map((name, i) => [name, {
     top: new THREE.Color(solid[i].top), top2: new THREE.Color(solid[i].top2 ?? solid[i].top), side: new THREE.Color(solid[i].side),

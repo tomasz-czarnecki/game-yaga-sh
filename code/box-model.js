@@ -7,14 +7,14 @@
 //   variants:  [{ material: colour }]  colour sets, picked by number (the hens)
 //   stages:    [{ boxes?, parts? }]    one look per growth stage, picked by number (the crops)
 import * as THREE from './lib/three.module.js';
+import { getJSON } from './loading.js';
 
 const files = {};
 
 /** Fetches the model files; call once at boot, before building anything. */
 export async function loadBoxModels(names) {
   await Promise.all(names.map(async (name) => {
-    files[name] = await fetch(`./assets/models/${name}.json`).then((r) => r.json())
-      .catch((e) => { throw new Error(`assets/models/${name}.json: ${e.message}`); });   // say which file has the typo
+    files[name] = await getJSON(`./assets/models/${name}.json`);
   }));
 }
 
