@@ -22,6 +22,27 @@ const pick = (a) => a[(Math.random() * a.length) | 0];
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 
+/* ───────────── words: everything said or labelled in the game lives in words/en.json ───────────── */
+let LINES, HOUSE_LINES, BOX_LINES, DEFEND, ARGUMENTS, POKE_END, GLY, WORDS, TOKS, BUG, UI;
+/** Takes the loaded words file into use. Boot calls this before anything is said. */
+function useWords(w) {
+  ({ yaga: LINES, house: HOUSE_LINES, box: BOX_LINES, defendBox: DEFEND, arguments: ARGUMENTS, pokeEnd: POKE_END, bugs: BUG, ui: UI } = w);
+  ({ glyphs: GLY, words: WORDS, tokens: TOKS } = w.gibberish);
+  document.documentElement.lang = w.lang;
+}
+/** Fills the {name} slots of a template; slots it is not given are left as they are. */
+const fill = (template, vars) => template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+/** The bug's plain name ('ant'), or its id if the words file does not know it. */
+const bugName = (id) => (BUG[id] ? BUG[id].name : id);
+/** Puts the words into the page's fixed labels: data-word is the text, data-word-aria the aria-label, data-word-alt the alt text. */
+function labelPage() {
+  const at = (path) => path.split('.').reduce((o, k) => o[k], UI);
+  document.title = UI.title;
+  for (const el of document.querySelectorAll('[data-word]')) el.textContent = at(el.dataset.word);
+  for (const el of document.querySelectorAll('[data-word-aria]')) el.setAttribute('aria-label', at(el.dataset.wordAria));
+  for (const el of document.querySelectorAll('[data-word-alt]')) el.setAttribute('alt', at(el.dataset.wordAlt));
+}
+
 /* ───────────── world constants (from the original clearing) ───────────── */
 // the homepage palette: cream and terracotta by day; by night its dark brown (#1C1A17), lit by the tree lamp and stars
 const DAY = {
@@ -820,11 +841,13 @@ async function boot() {
 
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
-  const [yaga, worldJson, ...loaded] = await Promise.all([
+  const [yaga, worldJson, wordsJson, ...loaded] = await Promise.all([
     loader.loadAsync('./assets/models/pani-yaga-dressed.glb'),
     fetch('./assets/worlds/home.json').then((r) => r.json()),
+    fetch('./words/en.json').then((r) => r.json()),
     ...files.map((f) => loader.loadAsync(`./assets/models/${f}.glb`)),
   ]);
+  useWords(wordsJson); labelPage();
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
   loadWorld(worldJson, SPAWN);
@@ -1028,7 +1051,6 @@ function applyPhase(n) {
 /* ───────────── her house: a log hut on chicken legs, like in the stories ───────────── */
 const HOUSE = { x: -3.6, z: -5.2 };                 // near the middle of the field
 const HOUSE_DOOR = { x: HOUSE.x, z: HOUSE.z + 2.9 };  // where she stands at the foot of the ladder
-const HOUSE_LINES = [`home sweet hut.`, `the legs were cheaper than stairs.`, `don't look at the dishes.`, `it ate the last postman.`];
 
 function buildHouse() {
   const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o });
@@ -2148,7 +2170,7 @@ function tickBrain(dt) {
 // tray: tap a bug kind → it hunts the nearest one of those
 function orderHunt(kind) {
   const prey = aliveBugs(kind).filter((i) => i.state === 'rest' && i.grow >= 1);
-  if (!prey.length) { pet.st.puffV += 2; say('nobug', { force: true, cool: 2, map: (l) => l.replace('{bug}', BUG_NAME[kind] || kind) }); return; }
+  if (!prey.length) { pet.st.puffV += 2; say('nobug', { force: true, cool: 2, map: (l) => l.replace('{bug}', bugName(kind)) }); return; }
   if (brain.mode === 'sleep' || brain.mode === 'nap') return poke();
   if (BUSY.includes(brain.mode)) { say('busy', { force: true, cool: 3 }); return; }
   prey.sort((a, b) => a.root.position.distanceTo(pet.pos) - b.root.position.distanceTo(pet.pos));
@@ -2156,12 +2178,11 @@ function orderHunt(kind) {
   ring(it.root.position);
   if (S.hunger < 0.08) return refuse(it);
   if (brain.food && brain.food !== it) brain.food.claimed = false;
-  if (S.crave && kind !== S.crave) say('wrong', { force: true, cool: 6, map: (l) => l.replace('{crave}', BUG_NAME[S.crave] || S.crave) });
+  if (S.crave && kind !== S.crave) say('wrong', { force: true, cool: 6, map: (l) => l.replace('{crave}', bugName(S.crave)) });
   else say('hunt', { cool: 5 });
   it.given = true;              // she treats it as "for me" from now on
   fetchFood(it, true);
 }
-const BUG_NAME = Object.fromEntries(BUGS.map((b) => [b.id, b.name.toLowerCase()]));
 function fetchFood(it, urgent = true) {
   brain.food = it; it.claimed = true;
   go(it.root.position.clone(), 'food', urgent);
@@ -2180,66 +2201,6 @@ function eaten(it) {
 }
 
 /* ───────────── talking: the homepage's typewriter cloud, in the pet's own voice ───────────── */
-const LINES = {
-  first: [`oh. a human. tap a bug down there. i'll handle it.`],
-  hello: [`oh. you're back.`, `took you long enough.`, `hi. the box is with me. sadly.`],
-  away: [`gone {n}. i counted.`, `{n}. not one bug. #@%!.`, `{n} away and you bring NOTHING?`],
-  tab: [`oh. you came back.`, `where the #@%! were you?`, `gone {n} seconds. i counted.`, `other tabs are prettier? fine.`],
-  crave_ladybug: [`ladybug. the spotty one. NOW.`, `i want the ladybug. 94% confidence.`, `seven spots. bring them.`],
-  crave_firefly: [`firefly. the glowy one.`, `firefly. it's dark in my head.`, `firefly. now you see it. GO.`],
-  crave_caterpillar: [`caterpillar. all of it.`, `one caterpillar. extra segments.`, `caterpillar. loop it into me.`],
-  crave_snail: [`snail. take your time. it does.`, `snail please. slow food.`, `the snail. i'll wait. barely.`],
-  crave_ant: [`ant. just one. there's never just one.`, `ant. small. fast. GO.`, `ants. the crunchy kind.`],
-  crave_beetle: [`the shiny beetle. NOW.`, `beetle. the one that looks real.`, `jewel beetle or i #@%!ing riot.`],
-  // fruit lines, parked: crave_strawberry / crave_orange / crave_blueberry / crave_mushroom live in app-v2.js
-  gross: [`ew. EW. who did this.`, `oh no. it's warm.`, `smells like legacy code.`, `i can taste it. #@%!.`, `that's a memory leak.`],
-  buried: [`buried. never speak of it.`, `garbage collected.`, `out of sight. out of memory.`, `deleted. no backups.`],
-  hunt: [`on it.`, `target acquired.`, `running query.`, `it can't hide.`],
-  foe: [`something crawled out of the dirt.`, `that one has teeth. #@%!.`, `bugs. with an attitude.`, `oh good. the biting kind.`],
-  bitten: [`ow. #@%!.`, `it BIT me.`, `i'm not a snack.`, `rude.`],
-  wrongTool: [`that needs the broom. press 1.`, `a shovel is not a flyswatter.`, `broom. key 1. try it.`],
-  tired: [`too tired to swing.`, `give me a minute. #@%!.`, `arms. noodles. wait.`],
-  foeDown: [`and stay down.`, `one less. forty to go.`, `squish. next.`],
-  faint: [`i'm not dead. just resting. loudly.`, `the ground is nice. i'll stay.`],
-  dug: [`farmland. i'm a farmer now. help.`, `nice dirt. now it needs a plan.`, `one plot. forty to go.`],
-  cantDig: [`can't dig that. plain dirt or grass, please.`, `that is water, stone or rude.`, `not there. i have standards.`],
-  planted: [`in it goes. now we wait. i hate waiting.`, `grow. or don't. i'm not your mother.`, `seeds. in dirt. what a plan.`],
-  noMana: [`not ripe. and no mana to hurry it.`, `it needs time or mana. i have neither.`, `wait a day. or wait for mana.`],
-  harvest: [`ripe. delicious. mine.`, `crunch. farming is fine, actually.`, `harvested. and eaten. efficient.`],
-  henHurt: [`the hens. it's biting the hens.`, `leave the chicken alone.`, `that's MY chicken.`],
-  henLost: [`a hen is gone. it'll be back at dawn. probably.`, `one hen down. rude.`, `the bugs ate a hen. #@%!.`],
-  henBack: [`the hens are back. dawn fixes everything.`, `morning. the flock is whole again.`],
-  defend: [`not on my watch.`, `get away from the chickens.`, `swat time.`],
-  henPet: [`good hen. she doesn't care.`, `she likes you. disgusting.`, `cluck. i agree.`],
-  egg: [`an egg. free food. the hens are useful.`, `still warm. don't think about it.`, `egg. into the face. i mean mouth.`],
-  grown: [`grow up. now.`, `magic. the dirt never saw it coming.`, `one day in one second. you're welcome.`],
-  nobug: [`no {bug}s around. wait for one.`, `zero {bug}s found. 404.`, `{bug}? not here. try again later.`],
-  busy: [`not now. i'm handling it.`, `busy. very busy. smelly busy.`],
-  sick: [`i feel #@%!. tap the poo.`, `health: declining. poo: abundant.`, `this place is a biohazard.`, `tap it. i'll clean it. i'm not an animal.`],
-  lonely: [`nobody visits the old witch anymore.`, `play with me. or don't. (do.)`, `entertainment levels: critical.`, `poke me. i dare you.`],
-  escaped: [`it got away. #@%!.`, `too slow. me, not it.`, `that bug had places to be.`],
-  wrong: [`that's not a {crave}.`, `close. wrong. but close.`, `i said {crave}. read the bubble.`],
-  yum_match: [`YES. exactly that. 100% match.`, `see? you CAN follow instructions.`, `prediction confirmed. delicious.`],
-  yum: [`not what i asked for. ate it anyway.`, `edible. 6/10.`, `close enough. #@%!.`],
-  full: [`full. 0% hungry. stop.`, `i'm a witch, not a bin.`, `no more. ever. (until later.)`],
-  poke: [`ow.`, `stop.`, `seriously, stop.`, `i will #@%!ing bite.`, `that's it. i'm not talking to you.`],
-  pet: [`...ok. that's nice.`, `don't stop. that's an order.`, `purr.exe running.`, `fine. you're forgiven.`, `left a bit. LEFT.`],
-  hover: [`personal space?`, `is it real hair? none of your #@%! business.`, `you can pet me. i won't say thanks.`],
-  poop: [`don't look at me.`, `that's model output. technically.`, `oops. anyway.`],
-  dirty: [`clean that up. it's YOUR clearing.`, `two of them. TWO.`, `smells like a #@%!ing standup.`],
-  clean: [`finally. hygiene.`, `thank you. i guess.`, `sparkling. like my reputation.`],
-  spotless: [`clean what? i'm spotless.`],
-  summon: [`coming. ugh.`, `you rang?`, `walking. happy now?`, `that's far. #@%!.`],
-  night: [`dark already? good. bugs get careless at night.`, `night shift. same complaints, fewer witnesses.`],
-  wake: [`WHO TURNED THE SUN ON.`, `five more minutes. too late.`, `morning. i hate it.`],
-  sleepy: [`low battery. 12%.`, `that was a yawn. take the hint.`, `turn the lights off. please.`],
-  sleep_poke: [`zz... no.`, `five. more. minutes.`, `i'm off duty.`],
-  idle: [`hello?`, `did you die?`, `i'm bored. point at a bug.`, `fine. i'll talk to myself.`, `tap tap. is this thing on?`],
-  mute: [`fine. #@%!ing fine.`],
-  unmute: [`missed me? obviously.`],
-};
-const GLY = '#$%&@*!?≈∑∆∫λθ∂±∞§', WORDS = ['blorp', 'zxq', 'hmm', 'grrbl', 'mnah', 'flib', 'eep', 'wuzz', 'bzzt', 'plonk', 'ugh', 'krrk'];
-const TOKS = ['∂L/∂θ', 'p=0.73', '0x3F?', 'argmax(?)', '∑≈∞', 'NaN', 'λ→?', '01101', 'err//', '∆=?!'];
 function gibber() {
   const n = 2 + ((Math.random() * 2) | 0), out = [];
   for (let i = 0; i < n; i++) { const r = Math.random(); out.push(r < 0.35 ? pick(WORDS) : r < 0.7 ? pick(TOKS) : Array.from({ length: 2 + ((Math.random() * 3) | 0) }, () => pick(GLY)).join('')); }
@@ -2247,7 +2208,7 @@ function gibber() {
 }
 function fmtAway(s) {
   const [n, u] = s < 3600 ? [Math.max(2, Math.round(s / 60)), 'minute'] : s < 86400 ? [Math.round(s / 3600), 'hour'] : [Math.round(s / 86400), 'day'];
-  return `${n} ${u}${n === 1 ? '' : 's'}`;
+  return `${n} ${UI.away[u][n === 1 ? 0 : 1]}`;
 }
 const Talk = { q: [], t0: -99, dur: 0, text: '', gib: false, shown: null, next: 7, lastMut: 0, side: 1, rot: 0, lift: 0, bags: {}, keyAt: {},
   lock: 0, clicks: 0, lastClick: -99, w: 0, h: 0, vis: false, lastK: 0, lastBlip: -9, inputAt: 0, idleN: 0, boot: null, hiddenAt: 0 };
@@ -2287,7 +2248,7 @@ function pokeTalk() {
   Talk.lastClick = t; Talk.clicks++;
   const line = LINES.poke[Talk.clicks - 1];
   if (Talk.clicks >= LINES.poke.length) {      // the silent treatment, then it caves
-    say(null, { force: true, text: line, dur: 2.6, then: [{ text: '...', dur: 8 }, { text: '...fine. what.', dur: 3 }] });
+    say(null, { force: true, text: line, dur: 2.6, then: [{ text: POKE_END[0], dur: 8 }, { text: POKE_END[1], dur: 3 }] });
     Talk.lock = t + 13.6; Talk.clicks = 0;
   } else say(null, { force: true, text: line, dur: 2.2 });
 }
@@ -2303,7 +2264,7 @@ function tickTalk(t) {
   else if (!talking() && t > Talk.next && t > Talk.lock) {
     Talk.next = t + rand(9, 16);
     const m = brain.mode;
-    if (m === 'sleep' || m === 'nap') { if (Math.random() < 0.3) say(null, { text: 'zz… ' + gibber(), gib: true }); }
+    if (m === 'sleep' || m === 'nap') { if (Math.random() < 0.3) say(null, { text: UI.napPrefix + gibber(), gib: true }); }
     else if (m === 'idle' || m === 'travel') {
       if (t - Talk.inputAt > 25 && Talk.idleN < 3) { if (say('idle')) Talk.idleN++; }
       else if (S.crave) say('crave_' + S.crave);
@@ -2364,31 +2325,6 @@ const boxSayEl = $('#saybox');
 const BOXSAY = { el: boxSayEl, cl: boxSayEl.querySelector('.cl'), tx: boxSayEl.querySelector('.tx'), dots: boxSayEl.querySelectorAll('.d') };
 const BoxTalk = { t0: -99, dur: 0, text: '', gib: false, shown: null, lastMut: 0, side: 1, rot: 0, lift: 0, w: 0, h: 0, vis: false, lastK: 0, lastBlip: -9 };
 const Box = { pet: null, pause: 0, face: 'smile', faceUntil: 0, shakeUntil: 0, nextHop: 6, nextArgue: 18, dialog: [], dialogAt: 0, pokes: [], look: new THREE.Vector3() };
-const BOX_LINES = {
-  eat: [`that one was mine.`, `chew with your mouth closed.`, `you didn't even share.`, `rated: suspicious.`],
-  poop: [`ew. EW.`, `i'm not cleaning that.`, `that's on you.`],
-  yagaPoked: [`ha. do it again.`, `finally, someone gets it.`, `poke her harder.`],
-  spell: [`show-off.`, `wow. magic. for poo.`, `abracadabra, gross.`],
-  dance: [`no.`, `please stop.`, `i'm not with her.`],
-  nap: [`lightweight.`, `zzz? already?`],
-  poked: [`hey!`, `i'm not the main character. stop.`, `poke her, not me.`, `i bite. allegedly.`],
-  night: [`it's dark. i'm darker.`, `finally. my colour.`],
-  home: [`your house has legs. mine has corners.`, `it's staring at me.`, `does it bite?`, `i'm sleeping outside.`],
-};
-const DEFEND = [`leave my box alone.`, `don't touch the box. it bites.`, `only i get to annoy it.`];
-// back-and-forths: y = Pani Yaga, b = the box
-const ARGUMENTS = [
-  [['y', `stop following me.`], ['b', `you're the one walking in front of me.`]],
-  [['b', `that bug was 73% mine.`], ['y', `your model is wrong. as usual.`]],
-  [['y', `three hundred years and i get a box.`], ['b', `a box with feelings. and fur.`]],
-  [['b', `are we lost?`], ['y', `witches don't get lost. we take scenic routes.`]],
-  [['b', `explain yourself.`], ['y', `i explain myself. you're the black box.`], ['b', `rude. accurate.`]],
-  [['y', `do something useful.`], ['b', `i am. i'm judging.`]],
-  [['b', `your broom is crooked.`], ['y', `your face is crooked.`], ['b', `i don't HAVE a face.`]],
-  [['y', `go fetch me a ladybug.`], ['b', `fetch it yourself. you have legs.`]],
-  [['b', `what's the plan?`], ['y', `complain. then ship it.`], ['b', `inspiring.`]],
-  [['y', `who's a good box?`], ['b', `not me. never me.`]],
-];
 const YAGA_ARGUE = ['complain_02', 'angry_02', 'complain_01'];
 
 function boxTalking() { const u = clock.t - BoxTalk.t0; return u >= 0 && u < BoxTalk.dur; }
@@ -2756,11 +2692,13 @@ function setStat(el, v, word) {
   el.classList.toggle('low', v < 0.25);
   el.setAttribute('aria-valuenow', String(pct));
 }
+/** Which of the five words (best first) a 0…1 stat gets. */
+const wordLevel = (v) => (v > 0.8 ? 0 : v > 0.55 ? 1 : v > 0.35 ? 2 : v > 0.15 ? 3 : 4);
 function tickStats() {
   const full = 1 - S.hunger, j = S.joy;
-  setStat(statEls.hunger, full, full > 0.8 ? 'stuffed' : full > 0.55 ? 'fed' : full > 0.35 ? 'peckish' : full > 0.15 ? 'hungry' : 'starving');
+  setStat(statEls.hunger, full, UI.hunger.words[wordLevel(full)]);
   setVital(vitalEls.health, S.health); setVital(vitalEls.mana, S.mana); setVital(vitalEls.stamina, S.energy);
-  setStat(statEls.joy, j, j > 0.8 ? 'thrilled' : j > 0.55 ? 'happy' : j > 0.35 ? 'fine' : j > 0.15 ? 'bored' : 'miserable');
+  setStat(statEls.joy, j, UI.joy.words[wordLevel(j)]);
 }
 function tickHUD() {
   tickStats();
@@ -2800,23 +2738,23 @@ function tickTray() {
   if (key === trayShown) return;
   trayShown = key;
   document.querySelectorAll('.care.food').forEach((b) => {
-    const n = counts[FOODS.indexOf(b.dataset.food)] || 0, name = BUG_NAME[b.dataset.food];
+    const n = counts[FOODS.indexOf(b.dataset.food)] || 0, bug = BUG[b.dataset.food];
     b.querySelector('.count').textContent = n;
     b.classList.toggle('dim', n === 0);
     b.classList.toggle('wanted', S.crave === b.dataset.food && n > 0);
-    b.setAttribute('aria-label', n ? `Hunt a ${name} (${n} around)` : `No ${name}s around`);
+    b.setAttribute('aria-label', n ? fill(UI.trayHunt, { a: bug.a, n }) : fill(UI.trayNone, { plural: bug.plural }));
   });
   const c = $('#clean'), cnt = c.querySelector('.count');
   cnt.hidden = false; cnt.textContent = np; cnt.classList.toggle('alert', np > 0);
   c.classList.toggle('wanted', np >= 2);
   c.classList.toggle('dim', np === 0);
-  c.setAttribute('aria-label', np ? `Clean up the poo (${np})` : 'Nothing to clean');
+  c.setAttribute('aria-label', np ? fill(UI.clean, { n: np }) : UI.cleanNone);
 }
 function refreshUI() {
   trayShown = '';
   tickTray(); showTool();
   show($('#iconSoundOn'), Sound.on); show($('#iconSoundOff'), !Sound.on);
-  $('#sound').setAttribute('aria-label', Sound.on ? 'Sound off' : 'Sound on');
+  $('#sound').setAttribute('aria-label', Sound.on ? UI.soundOff : UI.soundOn);    // the label names what a tap does
 }
 function spawnFx(cls, x, y, html, vars = {}) {
   const el = document.createElement('div');
@@ -2838,7 +2776,7 @@ function sparkle(x, y) {
 function zz() {
   const head = pet.pos.clone(); head.y += YAGA_H;
   const s = screenOf(head);
-  spawnFx('zz', s.x + 14, s.y - 20, 'z');
+  spawnFx('zz', s.x + 14, s.y - 20, UI.sleepZ);
 }
 
 /** Scrolling zooms: out for a little more of the field, in towards a human view of her and the Box. */
@@ -2892,14 +2830,14 @@ function tickClock() {
   clockEl.hand.setAttribute('transform', `rotate(${((f - 0.5) * 360).toFixed(1)} 20 20)`);
   const key = hh + mm + S.night;
   const to = ((S.night ? DAWN : DUSK) - f + 1) % 1, secs = Math.ceil(to * DAY_LEN);
-  const nx = `${S.night ? 'day' : 'night'} in ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  const nx = fill(UI.nextIn, { phase: S.night ? UI.day : UI.night, m: Math.floor(secs / 60), s: String(secs % 60).padStart(2, '0') });
   if (clockEl.next.textContent !== nx) clockEl.next.textContent = nx;
   if (key === clockShown) return;
   clockShown = key;
   clockEl.time.textContent = `${hh}:${mm}`;
   clockEl.sun.setAttribute('fill', S.night ? '#F0EADC' : '#D6A446');
   clockEl.root.classList.toggle('night', S.night);
-  clockEl.root.setAttribute('aria-label', `${hh}:${mm}, ${S.night ? 'night' : 'day'}. ${nx}.`);
+  clockEl.root.setAttribute('aria-label', fill(UI.clockAria, { time: `${hh}:${mm}`, phase: S.night ? UI.night : UI.day, next: nx }));
 }
 /* ───────────── loop ───────────── */
 let last = performance.now(), lastTick = 0;
@@ -2950,6 +2888,9 @@ boot().catch((err) => {
   console.error(err);
   $('#loading').classList.add('gone');
   const m = document.createElement('p'); m.id = 'oops';
-  m.textContent = 'Pani Yaga needs WebGL 2 to wake up. Try opening this page in Chrome or Safari.';
+  // these two texts stay here, not in words/en.json: they must work when the words (or any game file) fail to load
+  m.textContent = err.message === 'WebGL2 required'
+    ? 'Pani Yaga needs WebGL 2 to wake up. Try opening this page in Chrome or Safari.'
+    : 'Pani Yaga could not load her game files. Try reloading the page.';
   document.body.appendChild(m);
 });

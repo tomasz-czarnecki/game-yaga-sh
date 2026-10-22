@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Game · Yaga Labs</title>
+<title>Game · Yaga Labs</title><!-- the tab title until the words load; words/en.json "ui.title" replaces it -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
@@ -206,7 +206,7 @@
   }
 </style>
 
-<div id="stage" aria-label="Pani Yaga and her black box in the clearing. Tap the ground to call her, tap her or the box to poke them, stroke her to pet her. They talk back, mostly to each other."></div>
+<div id="stage" data-word-aria="stage"></div>
 <div class="vignette"></div>
 <div id="fx"></div>
 
@@ -221,7 +221,7 @@
 <div id="saybox" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
 <div id="say" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
 
-<div class="clock" id="clock" role="timer" aria-label="Time of day">
+<div class="clock" id="clock" role="timer" data-word-aria="clock">
   <svg viewBox="0 0 40 40" aria-hidden="true">
     <circle cx="20" cy="20" r="15" fill="none" stroke="#3a3129" stroke-width="4"/>
     <circle cx="20" cy="20" r="15" fill="none" stroke="#D6A446" stroke-width="4" stroke-dasharray="54.98 94.25" transform="rotate(180 20 20)"/>
@@ -231,55 +231,55 @@
     </g>
     <circle cx="20" cy="20" r="2.2" fill="#F0EADC"/>
   </svg>
-  <div class="tx"><b id="clockTime">09:00</b><span id="clockNext">night in 2:55</span></div>
+  <div class="tx"><b id="clockTime">09:00</b><span id="clockNext"></span></div>
 </div>
 
-<button class="round" id="sound" aria-label="Sound off">
+<button class="round" id="sound" data-word-aria="soundOff">
   <svg id="iconSoundOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
   <svg id="iconSoundOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
 </button>
 
 <div class="side">
 <div class="head">
-<img class="portrait" src="assets/images/yaga-face.png" alt="Pani Yaga" width="256" height="256">
-<section class="stats" aria-label="How it's doing">
-  <div class="stat" id="statHunger" role="meter" aria-label="Hunger: how full it is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Hunger</span><span class="bar"><i></i></span><span class="val">fed</span></div>
-  <div class="stat" id="statJoy" role="meter" aria-label="Happiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl">Happiness</span><span class="bar"><i></i></span><span class="val">fine</span></div>
+<img class="portrait" src="assets/images/yaga-face.png" data-word-alt="portrait" width="256" height="256">
+<section class="stats" data-word-aria="stats">
+  <div class="stat" id="statHunger" role="meter" data-word-aria="hunger.aria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl" data-word="hunger.label"></span><span class="bar"><i></i></span><span class="val"></span></div>
+  <div class="stat" id="statJoy" role="meter" data-word-aria="joy.aria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="lbl" data-word="joy.label"></span><span class="bar"><i></i></span><span class="val"></span></div>
 </section>
 </div>
 
 <div class="dock">
-  <nav class="tray" aria-label="Bugs out there: tap one to hunt it">
-    <button class="care food" data-food="ladybug" aria-label="Hunt a ladybug"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
-    <button class="care food" data-food="firefly" aria-label="Hunt a firefly"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
-    <button class="care food" data-food="caterpillar" aria-label="Hunt a caterpillar"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
-    <button class="care food" data-food="snail" aria-label="Hunt a snail"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
-    <button class="care food" data-food="ant" aria-label="Hunt an ant"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
-    <button class="care food" data-food="beetle" aria-label="Hunt a jewel beetle"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+  <nav class="tray" data-word-aria="tray">
+    <button class="care food" data-food="ladybug"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="firefly"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="caterpillar"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="snail"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="ant"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+    <button class="care food" data-food="beetle"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
   </nav>
-  <nav class="tray poo" aria-label="Poo to clean">
-    <button class="care" id="clean" aria-label="Clean up the poo"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
+  <nav class="tray poo" data-word-aria="pooTray">
+    <button class="care" id="clean"><canvas width="104" height="104"></canvas><span class="count">0</span></button>
   </nav>
 </div>
 </div>
 
-<div class="hotbar" id="hotbar" role="group" aria-label="Health, mana, stamina and tools">
+<div class="hotbar" id="hotbar" role="group" data-word-aria="hotbar">
   <div class="vitals">
-    <div class="vital hp" id="vitalHealth" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="90"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.4c0 5.5-7.5 10.1-7.5 10.1Z"/></svg><span class="bar"><i></i></span></div>
-    <div class="vital mana" id="vitalMana" role="meter" aria-label="Mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.6 4.3 6 7.1 6 10.4a6 6 0 0 1-12 0C6 10.1 8.4 7.3 12 3Z"/></svg><span class="bar"><i></i></span></div>
-    <div class="vital stam" id="vitalStamina" role="meter" aria-label="Stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="85"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2.5 5.5 13.5H11l-1 8 8-11.5h-5.5Z"/></svg><span class="bar"><i></i></span></div>
+    <div class="vital hp" id="vitalHealth" role="meter" data-word-aria="health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="90"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.4c0 5.5-7.5 10.1-7.5 10.1Z"/></svg><span class="bar"><i></i></span></div>
+    <div class="vital mana" id="vitalMana" role="meter" data-word-aria="mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.6 4.3 6 7.1 6 10.4a6 6 0 0 1-12 0C6 10.1 8.4 7.3 12 3Z"/></svg><span class="bar"><i></i></span></div>
+    <div class="vital stam" id="vitalStamina" role="meter" data-word-aria="stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="85"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2.5 5.5 13.5H11l-1 8 8-11.5h-5.5Z"/></svg><span class="bar"><i></i></span></div>
   </div>
-  <div class="tools" role="radiogroup" aria-label="Tool in her hand">
-    <button class="tool" data-tool="broom" role="radio" aria-checked="true" aria-label="Broomstick (key 1)"><kbd>1</kbd>
+  <div class="tools" role="radiogroup" data-word-aria="tools">
+    <button class="tool" data-tool="broom" role="radio" aria-checked="true" data-word-aria="broom"><kbd>1</kbd>
       <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(45 12 12)"><path d="M12 2v10" fill="none"/><path d="M10.4 12h3.2l3 9.5H7.4Z"/></g></svg></button>
-    <button class="tool" data-tool="shovel" role="radio" aria-checked="false" aria-label="Shovel (key 2)"><kbd>2</kbd>
+    <button class="tool" data-tool="shovel" role="radio" aria-checked="false" data-word-aria="shovel"><kbd>2</kbd>
       <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(45 12 12)"><path d="M12 3.5V13M9 3.5h6" fill="none"/><path d="M12 13c-3 0-4.5 2.5-3.5 6L12 22.5 15.5 19c1-3.5-.5-6-3.5-6Z"/></g></svg></button>
   </div>
 </div>
 
-<a class="home" href="https://yaga.sh/" aria-label="Back to Yaga Labs"><span class="arrow">←</span><span class="txt">YagaLabs</span></a>
+<a class="home" href="https://yaga.sh/" data-word-aria="home"><span class="arrow">←</span><span class="txt" data-word="homeText"></span></a>
 
-<div id="loading" role="status" aria-label="Waking Pani Yaga"><div class="box"></div></div>
+<div id="loading" role="status" data-word-aria="loading"><div class="box"></div></div>
 
 <script type="module" src="./code/app.js"></script>
 

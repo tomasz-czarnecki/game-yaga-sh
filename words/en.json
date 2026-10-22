@@ -1,0 +1,484 @@
+{
+  "lang": "en",
+  "yaga": {
+    "first": [
+      "oh. a human. tap a bug down there. i'll handle it."
+    ],
+    "hello": [
+      "oh. you're back.",
+      "took you long enough.",
+      "hi. the box is with me. sadly."
+    ],
+    "away": [
+      "gone {n}. i counted.",
+      "{n}. not one bug. #@%!.",
+      "{n} away and you bring NOTHING?"
+    ],
+    "tab": [
+      "oh. you came back.",
+      "where the #@%! were you?",
+      "gone {n} seconds. i counted.",
+      "other tabs are prettier? fine."
+    ],
+    "crave_ladybug": [
+      "ladybug. the spotty one. NOW.",
+      "i want the ladybug. 94% confidence.",
+      "seven spots. bring them."
+    ],
+    "crave_firefly": [
+      "firefly. the glowy one.",
+      "firefly. it's dark in my head.",
+      "firefly. now you see it. GO."
+    ],
+    "crave_caterpillar": [
+      "caterpillar. all of it.",
+      "one caterpillar. extra segments.",
+      "caterpillar. loop it into me."
+    ],
+    "crave_snail": [
+      "snail. take your time. it does.",
+      "snail please. slow food.",
+      "the snail. i'll wait. barely."
+    ],
+    "crave_ant": [
+      "ant. just one. there's never just one.",
+      "ant. small. fast. GO.",
+      "ants. the crunchy kind."
+    ],
+    "crave_beetle": [
+      "the shiny beetle. NOW.",
+      "beetle. the one that looks real.",
+      "jewel beetle or i #@%!ing riot."
+    ],
+    "gross": [
+      "ew. EW. who did this.",
+      "oh no. it's warm.",
+      "smells like legacy code.",
+      "i can taste it. #@%!.",
+      "that's a memory leak."
+    ],
+    "buried": [
+      "buried. never speak of it.",
+      "garbage collected.",
+      "out of sight. out of memory.",
+      "deleted. no backups."
+    ],
+    "hunt": [
+      "on it.",
+      "target acquired.",
+      "running query.",
+      "it can't hide."
+    ],
+    "foe": [
+      "something crawled out of the dirt.",
+      "that one has teeth. #@%!.",
+      "bugs. with an attitude.",
+      "oh good. the biting kind."
+    ],
+    "bitten": [
+      "ow. #@%!.",
+      "it BIT me.",
+      "i'm not a snack.",
+      "rude."
+    ],
+    "wrongTool": [
+      "that needs the broom. press 1.",
+      "a shovel is not a flyswatter.",
+      "broom. key 1. try it."
+    ],
+    "tired": [
+      "too tired to swing.",
+      "give me a minute. #@%!.",
+      "arms. noodles. wait."
+    ],
+    "foeDown": [
+      "and stay down.",
+      "one less. forty to go.",
+      "squish. next."
+    ],
+    "faint": [
+      "i'm not dead. just resting. loudly.",
+      "the ground is nice. i'll stay."
+    ],
+    "dug": [
+      "farmland. i'm a farmer now. help.",
+      "nice dirt. now it needs a plan.",
+      "one plot. forty to go."
+    ],
+    "cantDig": [
+      "can't dig that. plain dirt or grass, please.",
+      "that is water, stone or rude.",
+      "not there. i have standards."
+    ],
+    "planted": [
+      "in it goes. now we wait. i hate waiting.",
+      "grow. or don't. i'm not your mother.",
+      "seeds. in dirt. what a plan."
+    ],
+    "noMana": [
+      "not ripe. and no mana to hurry it.",
+      "it needs time or mana. i have neither.",
+      "wait a day. or wait for mana."
+    ],
+    "harvest": [
+      "ripe. delicious. mine.",
+      "crunch. farming is fine, actually.",
+      "harvested. and eaten. efficient."
+    ],
+    "henHurt": [
+      "the hens. it's biting the hens.",
+      "leave the chicken alone.",
+      "that's MY chicken."
+    ],
+    "henLost": [
+      "a hen is gone. it'll be back at dawn. probably.",
+      "one hen down. rude.",
+      "the bugs ate a hen. #@%!."
+    ],
+    "henBack": [
+      "the hens are back. dawn fixes everything.",
+      "morning. the flock is whole again."
+    ],
+    "defend": [
+      "not on my watch.",
+      "get away from the chickens.",
+      "swat time."
+    ],
+    "henPet": [
+      "good hen. she doesn't care.",
+      "she likes you. disgusting.",
+      "cluck. i agree."
+    ],
+    "egg": [
+      "an egg. free food. the hens are useful.",
+      "still warm. don't think about it.",
+      "egg. into the face. i mean mouth."
+    ],
+    "grown": [
+      "grow up. now.",
+      "magic. the dirt never saw it coming.",
+      "one day in one second. you're welcome."
+    ],
+    "nobug": [
+      "no {bug}s around. wait for one.",
+      "zero {bug}s found. 404.",
+      "{bug}? not here. try again later."
+    ],
+    "busy": [
+      "not now. i'm handling it.",
+      "busy. very busy. smelly busy."
+    ],
+    "sick": [
+      "i feel #@%!. tap the poo.",
+      "health: declining. poo: abundant.",
+      "this place is a biohazard.",
+      "tap it. i'll clean it. i'm not an animal."
+    ],
+    "lonely": [
+      "nobody visits the old witch anymore.",
+      "play with me. or don't. (do.)",
+      "entertainment levels: critical.",
+      "poke me. i dare you."
+    ],
+    "escaped": [
+      "it got away. #@%!.",
+      "too slow. me, not it.",
+      "that bug had places to be."
+    ],
+    "wrong": [
+      "that's not a {crave}.",
+      "close. wrong. but close.",
+      "i said {crave}. read the bubble."
+    ],
+    "yum_match": [
+      "YES. exactly that. 100% match.",
+      "see? you CAN follow instructions.",
+      "prediction confirmed. delicious."
+    ],
+    "yum": [
+      "not what i asked for. ate it anyway.",
+      "edible. 6/10.",
+      "close enough. #@%!."
+    ],
+    "full": [
+      "full. 0% hungry. stop.",
+      "i'm a witch, not a bin.",
+      "no more. ever. (until later.)"
+    ],
+    "poke": [
+      "ow.",
+      "stop.",
+      "seriously, stop.",
+      "i will #@%!ing bite.",
+      "that's it. i'm not talking to you."
+    ],
+    "pet": [
+      "...ok. that's nice.",
+      "don't stop. that's an order.",
+      "purr.exe running.",
+      "fine. you're forgiven.",
+      "left a bit. LEFT."
+    ],
+    "hover": [
+      "personal space?",
+      "is it real hair? none of your #@%! business.",
+      "you can pet me. i won't say thanks."
+    ],
+    "poop": [
+      "don't look at me.",
+      "that's model output. technically.",
+      "oops. anyway."
+    ],
+    "dirty": [
+      "clean that up. it's YOUR clearing.",
+      "two of them. TWO.",
+      "smells like a #@%!ing standup."
+    ],
+    "clean": [
+      "finally. hygiene.",
+      "thank you. i guess.",
+      "sparkling. like my reputation."
+    ],
+    "spotless": [
+      "clean what? i'm spotless."
+    ],
+    "summon": [
+      "coming. ugh.",
+      "you rang?",
+      "walking. happy now?",
+      "that's far. #@%!."
+    ],
+    "night": [
+      "dark already? good. bugs get careless at night.",
+      "night shift. same complaints, fewer witnesses."
+    ],
+    "wake": [
+      "WHO TURNED THE SUN ON.",
+      "five more minutes. too late.",
+      "morning. i hate it."
+    ],
+    "sleepy": [
+      "low battery. 12%.",
+      "that was a yawn. take the hint.",
+      "turn the lights off. please."
+    ],
+    "sleep_poke": [
+      "zz... no.",
+      "five. more. minutes.",
+      "i'm off duty."
+    ],
+    "idle": [
+      "hello?",
+      "did you die?",
+      "i'm bored. point at a bug.",
+      "fine. i'll talk to myself.",
+      "tap tap. is this thing on?"
+    ],
+    "mute": [
+      "fine. #@%!ing fine."
+    ],
+    "unmute": [
+      "missed me? obviously."
+    ]
+  },
+  "house": [
+    "home sweet hut.",
+    "the legs were cheaper than stairs.",
+    "don't look at the dishes.",
+    "it ate the last postman."
+  ],
+  "defendBox": [
+    "leave my box alone.",
+    "don't touch the box. it bites.",
+    "only i get to annoy it."
+  ],
+  "box": {
+    "eat": [
+      "that one was mine.",
+      "chew with your mouth closed.",
+      "you didn't even share.",
+      "rated: suspicious."
+    ],
+    "poop": [
+      "ew. EW.",
+      "i'm not cleaning that.",
+      "that's on you."
+    ],
+    "yagaPoked": [
+      "ha. do it again.",
+      "finally, someone gets it.",
+      "poke her harder."
+    ],
+    "spell": [
+      "show-off.",
+      "wow. magic. for poo.",
+      "abracadabra, gross."
+    ],
+    "dance": [
+      "no.",
+      "please stop.",
+      "i'm not with her."
+    ],
+    "nap": [
+      "lightweight.",
+      "zzz? already?"
+    ],
+    "poked": [
+      "hey!",
+      "i'm not the main character. stop.",
+      "poke her, not me.",
+      "i bite. allegedly."
+    ],
+    "night": [
+      "it's dark. i'm darker.",
+      "finally. my colour."
+    ],
+    "home": [
+      "your house has legs. mine has corners.",
+      "it's staring at me.",
+      "does it bite?",
+      "i'm sleeping outside."
+    ]
+  },
+  "arguments": [
+    [
+      ["y", "stop following me."],
+      ["b", "you're the one walking in front of me."]
+    ],
+    [
+      ["b", "that bug was 73% mine."],
+      ["y", "your model is wrong. as usual."]
+    ],
+    [
+      ["y", "three hundred years and i get a box."],
+      ["b", "a box with feelings. and fur."]
+    ],
+    [
+      ["b", "are we lost?"],
+      ["y", "witches don't get lost. we take scenic routes."]
+    ],
+    [
+      ["b", "explain yourself."],
+      ["y", "i explain myself. you're the black box."],
+      ["b", "rude. accurate."]
+    ],
+    [
+      ["y", "do something useful."],
+      ["b", "i am. i'm judging."]
+    ],
+    [
+      ["b", "your broom is crooked."],
+      ["y", "your face is crooked."],
+      ["b", "i don't HAVE a face."]
+    ],
+    [
+      ["y", "go fetch me a ladybug."],
+      ["b", "fetch it yourself. you have legs."]
+    ],
+    [
+      ["b", "what's the plan?"],
+      ["y", "complain. then ship it."],
+      ["b", "inspiring."]
+    ],
+    [
+      ["y", "who's a good box?"],
+      ["b", "not me. never me."]
+    ]
+  ],
+  "pokeEnd": ["...", "...fine. what."],
+  "gibberish": {
+    "glyphs": "#$%&@*!?≈∑∆∫λθ∂±∞§",
+    "words": ["blorp", "zxq", "hmm", "grrbl", "mnah", "flib", "eep", "wuzz", "bzzt", "plonk", "ugh", "krrk"],
+    "tokens": ["∂L/∂θ", "p=0.73", "0x3F?", "argmax(?)", "∑≈∞", "NaN", "λ→?", "01101", "err//", "∆=?!"]
+  },
+  "bugs": {
+    "ladybug": {
+      "name": "ladybug",
+      "a": "a ladybug",
+      "plural": "ladybugs",
+      "bug": "off-by-one",
+      "line": "seven spots. you counted six."
+    },
+    "firefly": {
+      "name": "firefly",
+      "a": "a firefly",
+      "plural": "fireflys",
+      "bug": "heisenbug",
+      "line": "only glows when you're not looking."
+    },
+    "caterpillar": {
+      "name": "caterpillar",
+      "a": "a caterpillar",
+      "plural": "caterpillars",
+      "bug": "infinite loop",
+      "line": "segments all the way down."
+    },
+    "snail": {
+      "name": "snail",
+      "a": "a snail",
+      "plural": "snails",
+      "bug": "slow query",
+      "line": "still loading. please hold."
+    },
+    "ant": {
+      "name": "ant",
+      "a": "an ant",
+      "plural": "ants",
+      "bug": "race condition",
+      "line": "there is never just one."
+    },
+    "beetle": {
+      "name": "jewel beetle",
+      "a": "a jewel beetle",
+      "plural": "jewel beetles",
+      "bug": "hallucination",
+      "line": "looks real. isn't."
+    }
+  },
+  "ui": {
+    "title": "Game · Yaga Labs",
+    "stage": "Pani Yaga and her black box in the clearing. Tap the ground to call her, tap her or the box to poke them, stroke her to pet her. They talk back, mostly to each other.",
+    "portrait": "Pani Yaga",
+    "stats": "How it's doing",
+    "hunger": {
+      "label": "Hunger",
+      "aria": "Hunger: how full it is",
+      "words": ["stuffed", "fed", "peckish", "hungry", "starving"]
+    },
+    "joy": {
+      "label": "Happiness",
+      "aria": "Happiness",
+      "words": ["thrilled", "happy", "fine", "bored", "miserable"]
+    },
+    "tray": "Bugs out there: tap one to hunt it",
+    "trayHunt": "Hunt {a} ({n} around)",
+    "trayNone": "No {plural} around",
+    "pooTray": "Poo to clean",
+    "clean": "Clean up the poo ({n})",
+    "cleanNone": "Nothing to clean",
+    "hotbar": "Health, mana, stamina and tools",
+    "health": "Health",
+    "mana": "Mana",
+    "stamina": "Stamina",
+    "tools": "Tool in her hand",
+    "broom": "Broomstick (key 1)",
+    "shovel": "Shovel (key 2)",
+    "soundOff": "Sound off",
+    "soundOn": "Sound on",
+    "clock": "Time of day",
+    "clockAria": "{time}, {phase}. {next}.",
+    "nextIn": "{phase} in {m}:{s}",
+    "day": "day",
+    "night": "night",
+    "home": "Back to Yaga Labs",
+    "homeText": "YagaLabs",
+    "loading": "Waking Pani Yaga",
+    "away": {
+      "minute": ["minute", "minutes"],
+      "hour": ["hour", "hours"],
+      "day": ["day", "days"]
+    },
+    "napPrefix": "zz… ",
+    "sleepZ": "z"
+  }
+}

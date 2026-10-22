@@ -4,14 +4,8 @@
 // Units match the fruit GLBs (~0.4 long), y-up, resting on y = 0, head facing +z.
 // tick(t, a): idle/crawl animation; a = amplitude 0..1 (0 = rest pose, used for export).
 
-export const BUGS = [
-  { id: 'ladybug', no: '01', name: 'Ladybug', bug: 'off-by-one', line: 'seven spots. you counted six.' },
-  { id: 'firefly', no: '02', name: 'Firefly', bug: 'heisenbug', line: "only glows when you're not looking." },
-  { id: 'caterpillar', no: '03', name: 'Caterpillar', bug: 'infinite loop', line: 'segments all the way down.' },
-  { id: 'snail', no: '04', name: 'Snail', bug: 'slow query', line: 'still loading. please hold.' },
-  { id: 'ant', no: '05', name: 'Ant', bug: 'race condition', line: 'there is never just one.' },
-  { id: 'beetle', no: '06', name: 'Jewel beetle', bug: 'hallucination', line: "looks real. isn't." },
-];
+// the bugs by id; their names (and the in-joke each stands for) are in words/en.json, under "bugs"
+export const BUGS = ['ladybug', 'firefly', 'caterpillar', 'snail', 'ant', 'beetle'].map((id) => ({ id }));
 
 export function makeBug(THREE, id) {
   const K = kit(THREE);
