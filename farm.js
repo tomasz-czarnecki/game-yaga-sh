@@ -9,6 +9,7 @@ export const FARM = {
   plant: { cost: 0.03, clip: 'bow', dur: 1.6, beats: [0.8], doneAt: 1.0, dirt: 3 },
   harvest: { cost: 0.05, clip: 'swing', dur: 1.8, beats: [0.5, 1.0], doneAt: 1.2, dirt: 5 },
   grow: { cost: 0, mana: 0.3, clip: 'cast_a_spell', dur: 2.2, beats: [], doneAt: 1.5 },    // the Grow spell: mana ripens a crop at once
+  egg: { cost: 0, clip: 'bow', dur: 1.3, beats: [], doneAt: 0.8 },                         // picking up an egg
 };
 
 export const CROPS = ['pumpkin', 'cabbage'];

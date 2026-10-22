@@ -8,6 +8,7 @@ import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt,
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 import { BROOM_MATERIAL, SWING, makeShovel, attachInHand } from './tools.js';
 import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
+import { makeChicken, makeEgg } from './chickens.js';
 
 /* ───────────── helpers ───────────── */
 const $ = (s) => document.querySelector(s);
@@ -71,6 +72,7 @@ const SCENERY = {
 const CANOPY = new THREE.Vector3(3.25, 3.4 * TREE_SCALE, -2.05);
 const SAVE_KEY = 'yaga-pet-v1';
 const DOCK_H = 100;                       // px at the bottom of the screen taken by the hotbar
+const FLOCK = 4;                          // the hens she keeps
 const DAY_LEN = 300;                      // seconds per in-game day (24h)
 const DAWN = 6 / 24, DUSK = 20 / 24;      // night runs 20:00 → 06:00
 const dayRaw = () => ((Date.now() / 1000) % DAY_LEN + DAY_LEN) % DAY_LEN;
@@ -731,6 +733,8 @@ const Sound = {
   equip() { this.tone(520, 760, 0.06, 0.06, 'square'); this.noise(0.05, 0.05, 2400, 2); },
   hurt() { this.tone(230, 90, 0.2, 0.12, 'sawtooth'); this.noise(0.1, 0.07, 500, 1); },
   swing() { this.noise(0.2, 0.1, 1300, 1, 0, 1800); },
+  cluck() { const f = rand(380, 520); this.tone(f, f * 1.25, 0.05, 0.08, 'square'); this.tone(f * 0.9, f * 1.1, 0.05, 0.07, 'square', 0.09); },
+  squawk() { this.tone(900, 500, 0.22, 0.1, 'sawtooth'); this.noise(0.12, 0.06, 2200, 1); },
   hit() { this.tone(190, 60, 0.12, 0.16, 'square'); this.noise(0.06, 0.1, 900, 1); },
 };
 
@@ -738,7 +742,7 @@ const Sound = {
 const S = {
   hunger: 0.62, energy: 0.85, joy: 0.5, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
   eaten: Object.fromEntries(FOODS.map((f) => [f, 0])), meals: 0, crave: null, lastCrave: null,
-  poops: [], farm: [], sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]
+  poops: [], farm: [], flock: FLOCK, sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]; flock: hens alive
 };
 function load() {
   try { loadSave(); } catch (e) { /* storage unavailable: start fresh */ }
@@ -754,6 +758,7 @@ function loadSave() {
     if (d.eaten) Object.assign(S.eaten, d.eaten);
     S.poops = Array.isArray(d.poops) ? d.poops.slice(0, 5) : [];
     S.farm = Array.isArray(d.farm) ? d.farm.slice(0, 300) : [];
+    S.flock = clamp(d.flock ?? FLOCK, 0, FLOCK);
     const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
     S.away = away;
     S.hunger = clamp((S.hunger ?? 0.5) + away / (3 * 3600), 0, 0.95);
@@ -768,13 +773,13 @@ function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       hunger: S.hunger, energy: S.energy, joy: S.joy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, meals: S.meals, crave: S.crave, sound: Sound.on,
-      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
+      eaten: S.eaten, farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, poops: world.poops.map((p) => ({ x: +p.root.position.x.toFixed(2), z: +p.root.position.z.toFixed(2) })), t: Date.now(),
     }));
   } catch (e) { /* ignore */ }
 }
 
 /* ───────────── world ───────────── */
-const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], plots: [], faintUntil: 0 };
+const world = { items: [], poops: [], vanishing: [], falling: [], clods: [], plots: [], hens: [], eggs: [], faintUntil: 0 };
 let renderer, scene, camera, viewCam, pet, iconKit, area, view;
 // Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
 // Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
@@ -858,6 +863,7 @@ async function boot() {
   addEventListener('resize', resize);
 
   for (const p of S.poops) spawnPoop(p.x, p.z, true);
+  for (let i = 0; i < S.flock; i++) addHen(i);
   phase.n = S.night ? 1 : 0; applyPhase(phase.n);
   world.spawnAt = rand(4, 8); world.foeAt = rand(8, 14);
   for (let i = 0; i < 4; i++) spawnSprout(true);
@@ -1344,7 +1350,7 @@ function bugTarget(it, exit = null) {
   return new THREE.Vector3(p.x, 0, p.z);
 }
 /* ───────────── hostile bugs: the ones that bite ───────────── */
-const HOSTILE = { kinds: ['beetle', 'ant'], hp: 2, size: 1.5, speed: 1.25, reach: BODY_R + 0.15, bite: 0.04, biteEvery: 1.8 };
+const HOSTILE = { kinds: ['beetle', 'ant'], hp: 2, size: 1.5, speed: 1.25, reach: BODY_R + 0.15, bite: 0.04, biteEvery: 1.8, henReach: 0.5, biteHen: 0.2, herRange: 2.2 };
 const hostileBugs = () => world.items.filter((i) => i.hostile);
 const FOE_RED = new THREE.Color(0xB32A1F);
 /** A bug that crawls out of the dirt, bigger and red-glowing, and goes straight for her. */
@@ -1361,20 +1367,52 @@ function spawnHostile(kind = pick(HOSTILE.kinds)) {
   say('foe', { cool: 25 });
   return it;
 }
+/** What a hostile bug goes for: the nearest hen, unless she is right beside it; her once the flock is gone. */
+function foeTarget(it) {
+  const p = it.root.position;
+  let hen = null, best = Infinity;
+  for (const h of world.hens) { const d = Math.hypot(h.root.position.x - p.x, h.root.position.z - p.z); if (d < best) { best = d; hen = h; } }
+  if (hen && Math.hypot(pet.pos.x - p.x, pet.pos.z - p.z) > HOSTILE.herRange) return { x: hen.root.position.x, z: hen.root.position.z, reach: HOSTILE.henReach, hen };
+  return { x: pet.pos.x, z: pet.pos.z, reach: HOSTILE.reach };
+}
 /** A hostile bug gives up and crawls off the edge of the field. */
 function sendOff(it) {
   const p = it.root.position, sp = spanAt(p.z);
   it.hostile = false; it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
 }
-/** A hostile bug next to her bites, every so often. A fresh hit stuns it and flashes it white for a moment. */
+/** A hostile bug next to its target (a hen or her) bites, every so often. A fresh hit stuns it and flashes it white for a moment. */
 function tickBite(it, dt) {
   it.stun = Math.max(0, it.stun - dt);
   if (it.flash > 0) { it.flash -= dt; for (const m of it.glow) m.emissiveIntensity = it.flash > 0 ? 2.2 : 0.6; }
   it.biteAt -= dt;
-  if (it.biteAt > 0 || it.stun > 0 || clock.t < world.faintUntil || it.state !== 'rest' || it.grow < 1) return;
-  if (Math.hypot(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z) > HOSTILE.reach + 0.1) return;
+  if (it.biteAt > 0 || it.stun > 0 || it.state !== 'rest' || it.grow < 1) return;
+  const p = it.root.position, tgt = foeTarget(it);
+  if (Math.hypot(p.x - tgt.x, p.z - tgt.z) > tgt.reach + 0.1) return;
+  if (!tgt.hen && clock.t < world.faintUntil) return;      // nobody bites her while she is down
   it.biteAt = HOSTILE.biteEvery;
-  hurtYaga(HOSTILE.bite);
+  if (tgt.hen) hurtHen(tgt.hen, HOSTILE.biteHen, p); else hurtYaga(HOSTILE.bite);
+}
+const FEATHER_GEO = new THREE.BoxGeometry(0.08, 0.01, 0.04), FEATHER_MAT = new THREE.MeshStandardMaterial({ color: 0xF0EADC, roughness: 1 });
+/** A bug bit a hen: it squawks and runs from it; at zero health it is lost in a puff of feathers. */
+function hurtHen(h, dmg, from) {
+  h.hp -= dmg; h.hurt = 0.3; h.flee = 1.1; h.away = { x: from.x, z: from.z }; Sound.squawk();
+  if (h.hp <= 0) return loseHen(h);
+  say('henHurt', { cool: 6 });
+}
+function loseHen(h) {
+  const p = h.root.position;
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.Mesh(FEATHER_GEO, FEATHER_MAT); m.position.set(p.x, p.y + 0.3, p.z); scene.add(m);
+    world.clods.push({ m, v: new THREE.Vector3(rand(-1.2, 1.2), rand(1.5, 3), rand(-1.2, 1.2)), spin: rand(-14, 14), dead: 0, floor: p.y + 0.02 });
+  }
+  scene.remove(h.root); world.hens = world.hens.filter((o) => o !== h);
+  S.flock = world.hens.length; say('henLost', { force: true }); save();
+}
+/** Hens that were lost come back with the morning. */
+function restoreFlock() {
+  if (world.hens.length >= FLOCK) return;
+  while (world.hens.length < FLOCK) addHen(world.hens.length);
+  S.flock = FLOCK; say('henBack', { force: true }); save();
 }
 const vignette = $('.vignette');
 /** Something hurt her: health drops, the screen edge flashes red, and she flinches if she is just standing there. */
@@ -1424,6 +1462,102 @@ function killFoe(f) {
   const s = screenOf(f.root.position.clone().setY(f.root.position.y + 0.3));
   vanish(f, 0, 0.5); sparkle(s.x, s.y); Sound.squeak(); Sound.poof();
   S.mana = clamp(S.mana + 0.12, 0, 1); say('foeDown', { cool: 5 });
+}
+
+/* ───────────── the hens: her flock, wandering in the yard in front of the hut ───────────── */
+const YARD = { x: -3.6, z: 0.4, r: 3.2 };
+const HEN = { speed: 0.7, run: 1.9 };
+const EGG = { every: [100, 160], max: 6 };            // seconds between a hen's eggs; the most eggs lying about
+/** A hen at a random spot in the yard. */
+function addHen(variant) {
+  const model = makeChicken(variant), a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * YARD.r;
+  const s = resolveSpot(YARD.x + Math.cos(a) * r, YARD.z + Math.sin(a) * r);
+  model.group.position.set(s.x, groundY(s.x, s.z), s.z);
+  const hen = { model, root: model.group, hp: 1, heading: rand(0, Math.PI * 2), v: 0, goal: null, rest: rand(0.3, 2), t: rand(0, 20), hurt: 0, flee: 0, away: null, eggAt: rand(...EGG.every) };
+  model.group.traverse((o) => { o.userData.hen = hen; });
+  scene.add(model.group); world.hens.push(hen);
+  return hen;
+}
+/** Somewhere for a hen to stroll to: a free spot in the yard. */
+function henGoal() {
+  for (let i = 0; i < 12; i++) {
+    const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * YARD.r, x = YARD.x + Math.cos(a) * r, z = YARD.z + Math.sin(a) * r;
+    if (!blocked(x, z, 0.3)) return { x, z };
+  }
+  return { x: YARD.x, z: YARD.z };
+}
+/** A hen stands about pecking, then strolls somewhere else; if something bit it, it runs from it. */
+function tickHen(h, dt) {
+  const p = h.root.position;
+  h.t += dt; h.hurt = Math.max(0, h.hurt - dt); h.hp = Math.min(1, h.hp + dt / 120);    // a bitten hen recovers in a couple of minutes
+  let speed = 0, peck = 0;
+  h.eggAt -= dt;
+  if (h.flee > 0) {
+    h.flee -= dt; speed = HEN.run;
+    h.heading += wrap(Math.atan2(p.x - h.away.x, p.z - h.away.z) - h.heading) * (1 - Math.exp(-12 * dt));
+  } else if (h.rest > 0) {
+    h.rest -= dt; peck = 0.5 + 0.5 * Math.sin(h.t * 7);
+    if (h.eggAt <= 0) layEgg(h);
+    if (h.rest <= 0) h.goal = henGoal();
+  } else {
+    const dx = h.goal.x - p.x, dz = h.goal.z - p.z;
+    if (Math.hypot(dx, dz) < 0.15) h.rest = rand(1.5, 5);
+    else { h.heading += wrap(Math.atan2(dx, dz) - h.heading) * (1 - Math.exp(-6 * dt)); speed = HEN.speed; }
+  }
+  h.v = ease(h.v, speed, 6, dt);
+  const nx = p.x + Math.sin(h.heading) * h.v * dt, nz = p.z + Math.cos(h.heading) * h.v * dt;
+  if (!blocked(nx, nz, 0.15)) { p.x = nx; p.z = nz; }
+  else { h.v = 0; h.goal = henGoal(); if (h.flee <= 0) h.rest = 0.5; }     // walked into something: think again
+  p.y = ease(p.y, groundY(p.x, p.z), 12, dt); h.root.rotation.y = h.heading;
+  h.model.tick(h.t, h.v / HEN.speed, peck, h.hurt > 0);
+}
+function tickHens(dt) { for (const h of world.hens) tickHen(h, dt); }
+/** A hen that is standing about lays an egg behind it. */
+function layEgg(h) {
+  h.eggAt = rand(...EGG.every);
+  if (world.eggs.length >= EGG.max) return;
+  const p = h.root.position, x = p.x - Math.sin(h.heading) * 0.22, z = p.z - Math.cos(h.heading) * 0.22;
+  const root = makeEgg(); root.position.set(x, groundY(x, z), z);
+  const tap = new THREE.Mesh(TAP_GEO, TAP_MAT); tap.scale.setScalar(0.28); tap.position.y = 0.1; root.add(tap);   // a roomy tap target for a small egg
+  const egg = { root, x, z };
+  root.traverse((o) => { o.userData.egg = egg; });
+  scene.add(root); world.eggs.push(egg); Sound.plop();
+}
+/** The hostile bug she should deal with: one in broom reach, or one at a hen near enough to run to. */
+function foeToDefend() {
+  let best = null, bestD = Infinity;
+  for (const f of hostileBugs()) {
+    const fp = f.root.position, d = Math.hypot(fp.x - pet.pos.x, fp.z - pet.pos.z);
+    const atHen = world.hens.some((h) => Math.hypot(h.root.position.x - fp.x, h.root.position.z - fp.z) < 3);
+    if (f.grow >= 1 && d < bestD && (d < SWING.reach || (atHen && d < 9))) { best = f; bestD = d; }
+  }
+  return best;
+}
+/** The hen under the tap ray, if any. */
+function hitHen() {
+  const hits = ray.intersectObjects(world.hens.map((h) => h.root), true);
+  return hits.length ? hits[0].object.userData.hen : null;
+}
+/** Tap on a hen: it clucks and she gets a heart. */
+function petHen(h) {
+  Sound.cluck(); h.rest = Math.max(h.rest, 1.2);
+  const s = screenOf(h.root.position.clone().setY(h.root.position.y + 0.5)); heart(s.x, s.y);
+  say('henPet', { cool: 12 });
+}
+/** The egg under the tap ray, if any. */
+function hitEgg() {
+  const hits = ray.intersectObjects(world.eggs.map((e) => e.root), true);
+  return hits.length ? hits[0].object.userData.egg : null;
+}
+/** Tap on an egg: she goes and picks it up. */
+function tapEgg(egg) {
+  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
+  ring(new THREE.Vector3(egg.x, groundY(egg.x, egg.z), egg.z));
+  orderFarm('egg', egg, { egg });
+}
+/** A harvest feeds the flock: the hens heal and lay sooner. */
+function feedFlock() {
+  for (const h of world.hens) { h.hp = Math.min(1, h.hp + 0.5); h.eggAt = Math.min(h.eggAt, 30); sparkleAt(h.root.position.x, h.root.position.z); }
 }
 
 /* ───────────── the farm: the shovel digs farmland ───────────── */
@@ -1478,16 +1612,16 @@ function tapShovel(hit) {
   const pl = hitPlot(), c = pl ? { x: pl.x, z: pl.z } : blockCentre(hit.x, hit.z), plot = pl || plotAt(c.x, c.z);
   ring(new THREE.Vector3(c.x, groundY(c.x, c.z), c.z));
   if (!plot) return canDig(c.x, c.z) ? orderFarm('dig', c) : say('cantDig', { cool: 4 });
-  if (!plot.crop) return orderFarm('plant', c, nextCrop());
+  if (!plot.crop) return orderFarm('plant', c, { crop: nextCrop() });
   orderFarm(stageOf(plot) === 2 ? 'harvest' : 'grow', c);
 }
 /** Walks her to her own side of the block, then the action starts (see arrive). */
-function orderFarm(act, c, crop = null) {
+function orderFarm(act, c, extra = {}) {
   if (FARM[act].mana && S.mana < FARM[act].mana) return say('noMana', { cool: 5 });
   if (S.energy < FARM[act].cost) return say('tired', { cool: 5 });
   const dx = pet.pos.x - c.x, dz = pet.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
   const spot = resolveSpot(c.x + (dx / d) * 1.0, c.z + (dz / d) * 1.0);
-  brain.farm = { act, crop, x: c.x, z: c.z, t: 0, beat: 0, done: false };
+  brain.farm = { act, x: c.x, z: c.z, t: 0, beat: 0, done: false, ...extra };
   go(new THREE.Vector3(spot.x, 0, spot.z), 'farm', false);
 }
 function startFarm() {
@@ -1533,7 +1667,13 @@ function finishFarm(F) {
   if (F.act === 'harvest') {                              // the crop is food: she eats her harvest
     plot.crop = null; plot.at = 0; showCrop(plot); sparkleAt(F.x, F.z); Sound.yum();
     S.hunger = clamp(S.hunger - 0.3, 0, 1); S.joy = clamp(S.joy + 0.06, 0, 1); S.health = clamp(S.health + 0.05, 0, 1);
-    say('harvest', { force: true });
+    feedFlock(); say('harvest', { force: true });
+  }
+  if (F.act === 'egg') {                                  // an egg is food too
+    scene.remove(F.egg.root); world.eggs = world.eggs.filter((e) => e !== F.egg);
+    sparkleAt(F.x, F.z); Sound.yum();
+    S.hunger = clamp(S.hunger - 0.18, 0, 1); S.joy = clamp(S.joy + 0.05, 0, 1); S.health = clamp(S.health + 0.03, 0, 1);
+    say('egg', { force: true });
   }
   if (F.act === 'grow') { plot.at = Date.now() - GROW.ripe * 1000; showCrop(plot); sparkleAt(F.x, F.z); Sound.chime(); say('grown', { force: true }); }
   save();
@@ -1551,13 +1691,14 @@ function tickBug(it, dt) {
   else if (w && live && it.state === 'rest' && it.grow >= 1) {
     const dPet = Math.hypot(p.x - pet.pos.x, p.z - pet.pos.z) || 1e-3;
     const scared = !it.hostile && dPet < BUG_FEAR && !pet.want.asleep && brain.mode !== 'sleep';
-    if (it.hostile) {                                    // always after her, round the pond and cliffs; it stops only to bite
-      if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, pet.pos.x, pet.pos.z); it.pathT = 0.25; }
-      w.rest = dPet < HOSTILE.reach || it.stun > 0 ? 1 : 0;
+    const tgt = it.hostile ? foeTarget(it) : null;
+    if (tgt) {                                           // always after its target, round the pond and cliffs; it stops only to bite
+      if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, tgt.x, tgt.z); it.pathT = 0.25; }
+      w.rest = Math.hypot(p.x - tgt.x, p.z - tgt.z) < tgt.reach || it.stun > 0 ? 1 : 0;
     }
     if (w.rest > 0 && !scared) {
       w.rest -= dt; w.v = ease(w.v, 0, 8, dt);
-      if (it.hostile) { w.heading += wrap(Math.atan2(pet.pos.x - p.x, pet.pos.z - p.z) - w.heading) * (1 - Math.exp(-10 * dt)); it.root.rotation.y = w.heading; }
+      if (tgt) { w.heading += wrap(Math.atan2(tgt.x - p.x, tgt.z - p.z) - w.heading) * (1 - Math.exp(-10 * dt)); it.root.rotation.y = w.heading; }
     }
     else {
       w.rest = 0;
@@ -1793,6 +1934,13 @@ function tickBrain(dt) {
       if (brain.cleanQ.length && nextClean()) break;
       if (brain.poopAt != null && t > brain.poopAt && world.poops.length < 5) { brain.poopAt = null; doPoop(); break; }
       if (S.energy < 0.04) { brain.mode = 'nap'; brain.napUntil = t + 22; boxReact('nap', 0.8); break; }
+      const foe = S.tool === 'broom' && S.energy >= SWING.cost ? foeToDefend() : null;   // with the broom in hand she looks after the flock
+      if (foe) {
+        say('defend', { cool: 14 });
+        if (Math.hypot(foe.root.position.x - pet.pos.x, foe.root.position.z - pet.pos.z) < SWING.reach) startAttack(foe);
+        else { brain.foe = foe; go(foe.root.position.clone(), 'attack', true); }
+        break;
+      }
       brain.until -= dt;
       if (Math.random() < dt * 0.25 && t > brain.glanceUntil) {
         brain.glanceUntil = t + rand(1, 2.2);
@@ -2058,6 +2206,12 @@ const LINES = {
   planted: [`in it goes. now we wait. i hate waiting.`, `grow. or don't. i'm not your mother.`, `seeds. in dirt. what a plan.`],
   noMana: [`not ripe. and no mana to hurry it.`, `it needs time or mana. i have neither.`, `wait a day. or wait for mana.`],
   harvest: [`ripe. delicious. mine.`, `crunch. farming is fine, actually.`, `harvested. and eaten. efficient.`],
+  henHurt: [`the hens. it's biting the hens.`, `leave the chicken alone.`, `that's MY chicken.`],
+  henLost: [`a hen is gone. it'll be back at dawn. probably.`, `one hen down. rude.`, `the bugs ate a hen. #@%!.`],
+  henBack: [`the hens are back. dawn fixes everything.`, `morning. the flock is whole again.`],
+  defend: [`not on my watch.`, `get away from the chickens.`, `swat time.`],
+  henPet: [`good hen. she doesn't care.`, `she likes you. disgusting.`, `cluck. i agree.`],
+  egg: [`an egg. free food. the hens are useful.`, `still warm. don't think about it.`, `egg. into the face. i mean mouth.`],
   grown: [`grow up. now.`, `magic. the dirt never saw it coming.`, `one day in one second. you're welcome.`],
   nobug: [`no {bug}s around. wait for one.`, `zero {bug}s found. 404.`, `{bug}? not here. try again later.`],
   busy: [`not now. i'm handling it.`, `busy. very busy. smelly busy.`],
@@ -2382,6 +2536,10 @@ function onDown(e) {
   if (poo) { Sound.init(); noteInput(); return orderClean([poo]); }
   const food = hitItem(world.items.filter((i) => i.state === 'rest'));
   if (food && food.hostile) return tapFoe(food);         // an enemy, not a snack
+  const egg = hitEgg();
+  if (egg) return tapEgg(egg);
+  const hen = hitHen();
+  if (hen) return petHen(hen);
   if (food) {
     if (brain.mode === 'sleep') return poke();
     if (S.hunger < 0.08) return refuse(food);
@@ -2721,6 +2879,7 @@ function setNight(on) {
   if (S.night === on) return;
   S.night = on;
   if (on) { Sound.night(); say('night', { force: true }); setTimeout(() => boxReact('night', 0.6), 4500); }
+  else restoreFlock();
   refreshUI(); save();
 }
 // the clock in the top right: 24h dial (noon at the top), digital time, countdown to the next switch
@@ -2752,7 +2911,7 @@ function simulate(dt) {
   if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
   tickBox(dt); Box.pet.update(dt, clock.t, camera);
   if (!Box.pet.airborne) { const c = clampXZ(Box.pet.pos.x, Box.pet.pos.z); Box.pet.pos.x = c.x; Box.pet.pos.z = c.z; }
-  tickProps(dt); tickFarm(dt);
+  tickProps(dt); tickFarm(dt); tickHens(dt);
   tickMarker(dt);
 }
 function advance(sec) { for (let i = 0; i < sec * 30; i++) simulate(1 / 30); applyPhase(phase.n); tickHUD(); tickTalk(clock.t); tickBoxTalk(clock.t); renderer.render(scene, camera); }
@@ -2771,7 +2930,7 @@ function frame() {
   if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
   tickBox(dt); Box.pet.update(dt, clock.t, camera);
   if (!Box.pet.airborne) { const c = clampXZ(Box.pet.pos.x, Box.pet.pos.z); Box.pet.pos.x = c.x; Box.pet.pos.z = c.z; }
-  tickProps(dt); tickFarm(dt);
+  tickProps(dt); tickFarm(dt); tickHens(dt);
   tickMarker(dt);
   tickHouse(dt, clock.t);
   iconKit.tick(dt, clock.t);
