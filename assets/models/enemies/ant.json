@@ -1,0 +1,12 @@
+{
+  "about": "The ant. The big red monsters can be ants too: the same model, made bigger (hostile.size in settings.js) with a red glow. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'bands' also colours its jaws; 'legs' also its antennae.",
+  "size": 1,
+  "colours": {
+    "rear": "#C8542F",
+    "body": "#8E3420",
+    "bands": "#5A2219",
+    "legs": "#7A2D1C",
+    "eyes": "#F7EFE4",
+    "pupils": "#130C1B"
+  }
+}

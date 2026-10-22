@@ -1,4 +1,5 @@
 // Bugs for the Black Box Pet: the things it eats instead of fruit (it's debugging, get it).
+// Their colours and overall size are in assets/models/enemies/<id>.json; the shapes are drawn here.
 // Every bug is built from primitives with named meshes + materials, so the game can either call
 // makeBug(THREE, id) directly with its own three.js, or load the GLB exported from Bug Lab.
 // Units match the fruit GLBs (~0.4 long), y-up, resting on y = 0, head facing +z.
@@ -6,10 +7,20 @@
 
 // the bugs by id; their names (and the in-joke each stands for) are in words/en.json, under "bugs"
 export const BUGS = ['ladybug', 'firefly', 'caterpillar', 'snail', 'ant', 'beetle'].map((id) => ({ id }));
+const LOOKS = {};
+
+/** Fetches each bug's colours and size from assets/models/enemies/<id>.json; call once at boot, before makeBug. */
+export async function loadBugLooks() {
+  await Promise.all(BUGS.map(async ({ id }) => {
+    LOOKS[id] = await fetch(`./assets/models/enemies/${id}.json`).then((r) => r.json())
+      .catch((e) => { throw new Error(`assets/models/enemies/${id}.json: ${e.message}`); });   // say which file has the typo
+  }));
+}
 
 export function makeBug(THREE, id) {
-  const K = kit(THREE);
-  const b = BUILD[id](THREE, K);
+  const K = kit(THREE), look = LOOKS[id];
+  const b = BUILD[id](THREE, K, look.colours);
+  b.group.scale.setScalar(look.size);
   b.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return b;
 }
@@ -140,13 +151,13 @@ function kit(THREE) {
 }
 
 const BUILD = {
-  ladybug(THREE, K) {
+  ladybug(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'Ladybug';
-    const red = K.mat('M_LadyShell', '#E23A2B', { roughness: 0.26, double: true });
-    const ink = K.mat('M_LadyInk', '#2A1C3A', { roughness: 0.5 });
-    const dot = K.mat('M_LadySpot', '#150D20', { roughness: 0.3 });
-    const cream = K.mat('M_LadyCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_LadyPupil', '#130C1B', { roughness: 0.12 });
+    const red = K.mat('M_LadyShell', C.shell, { roughness: 0.26, double: true });
+    const ink = K.mat('M_LadyInk', C.body, { roughness: 0.5 });
+    const dot = K.mat('M_LadySpot', C.spots, { roughness: 0.3 });
+    const cream = K.mat('M_LadyCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_LadyPupil', C.pupils, { roughness: 0.12 });
 
     const body = K.group(root, 'Ladybug_Body');
     K.ball(body, 'Ladybug_Belly', ink, [0, 0.066, -0.005], [0.122, 0.05, 0.15]);
@@ -182,15 +193,15 @@ const BUILD = {
     return { group: root, tick };
   },
 
-  firefly(THREE, K) {
+  firefly(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'Firefly';
-    const shell = K.mat('M_FireflyShell', '#3E2C44', { roughness: 0.42, double: true });
-    const edge = K.mat('M_FireflyEdge', '#EBD9AE', { roughness: 0.5 });
-    const shield = K.mat('M_FireflyShield', '#F08848', { roughness: 0.38 });
-    const ink = K.mat('M_FireflyInk', '#221829', { roughness: 0.5 });
-    const lamp = K.mat('M_FireflyLantern', '#FFD86B', { roughness: 0.35, e: '#F4C24E', ei: 1.6 });
-    const cream = K.mat('M_FireflyCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_FireflyPupil', '#130C1B', { roughness: 0.12 });
+    const shell = K.mat('M_FireflyShell', C.shell, { roughness: 0.42, double: true });
+    const edge = K.mat('M_FireflyEdge', C.edges, { roughness: 0.5 });
+    const shield = K.mat('M_FireflyShield', C.shield, { roughness: 0.38 });
+    const ink = K.mat('M_FireflyInk', C.body, { roughness: 0.5 });
+    const lamp = K.mat('M_FireflyLantern', C.lantern, { roughness: 0.35, e: C.lanternGlow, ei: 1.6 });
+    const cream = K.mat('M_FireflyCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_FireflyPupil', C.pupils, { roughness: 0.12 });
 
     const body = K.group(root, 'Firefly_Body');
     K.ball(body, 'Firefly_Belly', ink, [0, 0.062, -0.01], [0.055, 0.038, 0.13]);
@@ -230,15 +241,15 @@ const BUILD = {
     return { group: root, tick, glow };
   },
 
-  caterpillar(THREE, K) {
+  caterpillar(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'Caterpillar';
-    const skin = K.mat('M_CaterSkin', '#8DD64F', { roughness: 0.5 });
-    const gold = K.mat('M_CaterDot', '#F6C64A', { roughness: 0.35 });
-    const pore = K.mat('M_CaterPore', '#3A2650', { roughness: 0.4 });
-    const foot = K.mat('M_CaterFoot', '#4B8A2C', { roughness: 0.55 });
-    const face = K.mat('M_CaterHead', '#EE8A3A', { roughness: 0.4 });
-    const cream = K.mat('M_CaterCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_CaterPupil', '#130C1B', { roughness: 0.12 });
+    const skin = K.mat('M_CaterSkin', C.skin, { roughness: 0.5 });
+    const gold = K.mat('M_CaterDot', C.dots, { roughness: 0.35 });
+    const pore = K.mat('M_CaterPore', C.pores, { roughness: 0.4 });
+    const foot = K.mat('M_CaterFoot', C.feet, { roughness: 0.55 });
+    const face = K.mat('M_CaterHead', C.head, { roughness: 0.4 });
+    const cream = K.mat('M_CaterCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_CaterPupil', C.pupils, { roughness: 0.12 });
 
     const N = 8, segs = [];
     for (let i = 0; i < N; i++) {
@@ -277,14 +288,14 @@ const BUILD = {
     return { group: root, tick };
   },
 
-  snail(THREE, K) {
+  snail(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'Snail';
-    const skin = K.mat('M_SnailSkin', '#F5C49A', { roughness: 0.38 });
-    const shellM = K.mat('M_SnailShell', '#E3A93A', { roughness: 0.32, double: true });
-    const stripe = K.mat('M_SnailStripe', '#F7E6C4', { roughness: 0.4 });
-    const hole = K.mat('M_SnailAperture', '#E0A67E', { roughness: 0.45, double: true });   // the body filling the opening
-    const cream = K.mat('M_SnailCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_SnailPupil', '#130C1B', { roughness: 0.12 });
+    const skin = K.mat('M_SnailSkin', C.skin, { roughness: 0.38 });
+    const shellM = K.mat('M_SnailShell', C.shell, { roughness: 0.32, double: true });
+    const stripe = K.mat('M_SnailStripe', C.stripe, { roughness: 0.4 });
+    const hole = K.mat('M_SnailAperture', C.opening, { roughness: 0.45, double: true });   // the body filling the opening
+    const cream = K.mat('M_SnailCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_SnailPupil', C.pupils, { roughness: 0.12 });
 
     const body = K.group(root, 'Snail_Body');
     const foot = K.group(body, 'Snail_Foot', [0, 0, -0.02]);
@@ -352,14 +363,14 @@ const BUILD = {
     return { group: root, tick };
   },
 
-  ant(THREE, K) {
+  ant(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'Ant';
-    const shell = K.mat('M_AntShell', '#C8542F', { roughness: 0.26 });
-    const dark = K.mat('M_AntDark', '#8E3420', { roughness: 0.34 });
-    const band = K.mat('M_AntBand', '#5A2219', { roughness: 0.4 });
-    const legM = K.mat('M_AntLeg', '#7A2D1C', { roughness: 0.4 });
-    const cream = K.mat('M_AntCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_AntPupil', '#130C1B', { roughness: 0.12 });
+    const shell = K.mat('M_AntShell', C.rear, { roughness: 0.26 });
+    const dark = K.mat('M_AntDark', C.body, { roughness: 0.34 });
+    const band = K.mat('M_AntBand', C.bands, { roughness: 0.4 });
+    const legM = K.mat('M_AntLeg', C.legs, { roughness: 0.4 });
+    const cream = K.mat('M_AntCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_AntPupil', C.pupils, { roughness: 0.12 });
 
     const body = K.group(root, 'Ant_Body');
     const head = K.group(body, 'Ant_Head', [0, 0.105, 0.152]);
@@ -392,14 +403,14 @@ const BUILD = {
     return { group: root, tick };
   },
 
-  beetle(THREE, K) {
+  beetle(THREE, K, C) {
     const root = new THREE.Group(); root.name = 'JewelBeetle';
-    const jewel = K.mat('M_BeetleJewel', '#1FA57F', { phys: true, roughness: 0.28, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.12, iridescence: 0.9, iridescenceIOR: 1.5, double: true });
-    const jewelDk = K.mat('M_BeetleJewelDark', '#14785F', { phys: true, roughness: 0.3, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.5 });
-    const gold = K.mat('M_BeetleGold', '#E8B84A', { roughness: 0.3, metalness: 0.35 });
-    const copper = K.mat('M_BeetleCopper', '#B8562F', { roughness: 0.35, metalness: 0.2 });
-    const cream = K.mat('M_BeetleCream', '#F7EFE4', { roughness: 0.35 });
-    const pupil = K.mat('M_BeetlePupil', '#130C1B', { roughness: 0.12 });
+    const jewel = K.mat('M_BeetleJewel', C.shell, { phys: true, roughness: 0.28, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.12, iridescence: 0.9, iridescenceIOR: 1.5, double: true });
+    const jewelDk = K.mat('M_BeetleJewelDark', C.neck, { phys: true, roughness: 0.3, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.15, iridescence: 0.7, iridescenceIOR: 1.5 });
+    const gold = K.mat('M_BeetleGold', C.stripes, { roughness: 0.3, metalness: 0.35 });
+    const copper = K.mat('M_BeetleCopper', C.legs, { roughness: 0.35, metalness: 0.2 });
+    const cream = K.mat('M_BeetleCream', C.eyes, { roughness: 0.35 });
+    const pupil = K.mat('M_BeetlePupil', C.pupils, { roughness: 0.12 });
 
     const body = K.group(root, 'JewelBeetle_Body');
     K.ball(body, 'JewelBeetle_Belly', copper, [0, 0.058, -0.03], [0.072, 0.042, 0.17]);

@@ -1,0 +1,6 @@
+{
+  "about": "Water: the pond's surface. 'colour' is hex, 'opacity' runs from 0 (clear) to 1 (solid), 'drop' is how far the surface sits below the shore in metres. Edit, save and reload the page.",
+  "colour": "#2c4f55",
+  "opacity": 0.72,
+  "drop": 0.1
+}

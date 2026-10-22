@@ -1,10 +1,10 @@
 // Yaga Game: Yaga living in the clearing. She hunts bugs, sleeps under the tree at night
 // and complains about everything. World and brain come from the whybox.ai pet game; the black box
-// creature is replaced by the rigged, dressed 3D Yaga (assets/models/yaga-dressed.glb).
+// creature is replaced by the rigged, dressed 3D Yaga (assets/models/yaga/yaga-dressed.glb).
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
-import { BUGS, makeBug } from './bug-models.js';
-import { loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell } from './terrain.js';
+import { BUGS, loadBugLooks, makeBug } from './bug-models.js';
+import { loadBlocks, loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 import { SWING, makeShovel, attachInHand } from './tools.js';
 import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
@@ -21,6 +21,8 @@ const ease = (c, t, k, dt) => c + (t - c) * (1 - Math.exp(-k * dt));
 const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[(Math.random() * a.length) | 0];
+/** Fetches a JSON file; a typo in it names the file in the error. */
+const getJSON = (url) => fetch(url).then((r) => r.json()).catch((e) => { throw new Error(`${url}: ${e.message}`); });
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 
@@ -75,7 +77,6 @@ const FOODS = BUGS.map((b) => b.id);
 const BUG_SIZE = 0.4;                     // bugs at 40% of the original game's size, so Yaga towers over them
 const BUG_S = 2.6 * BUG_SIZE;             // bug-models units → world
 const BUG_TAP_R = 0.45;                   // world radius of a bug's invisible tap target, so small bugs stay easy to tap
-const BOX_S = 0.2;                        // the black box sidekick: creature units → world (ankle-high to her)
 const BODY_R = 0.86;                      // how close things may come to her (world units)
 const SPAWN = { x: 0.2, z: 1.2 };         // where she starts; the terrain's walkable area grows from here
 const TREE = { x: 3.25, z: -2.05 };
@@ -421,23 +422,25 @@ function roundedCube(r, seg) {
 
 /* ───────────── the creature ───────────── */
 const FURLIGHT = {
-  day: { sky: new THREE.Color('#a08670'), ground: new THREE.Color('#2a2017'), key: new THREE.Color('#ffd8b0').multiplyScalar(1.5), root: new THREE.Color('#1a1714'), rim: 1.5 },
-  night: { sky: new THREE.Color('#6a5444'), ground: new THREE.Color('#0e0c0a'), key: new THREE.Color('#ffd6ae').multiplyScalar(0.9), root: new THREE.Color('#151210'), rim: 1.3 },
+  day: { sky: new THREE.Color('#a08670'), ground: new THREE.Color('#2a2017'), key: new THREE.Color('#ffd8b0').multiplyScalar(1.5), rim: 1.5 },
+  night: { sky: new THREE.Color('#6a5444'), ground: new THREE.Color('#0e0c0a'), key: new THREE.Color('#ffd6ae').multiplyScalar(0.9), rim: 1.3 },
 };
 
-/** The black box: the original whybox.ai creature, now Yaga's furry sidekick. */
+/** The black box: the original whybox.ai creature, now Yaga's furry sidekick. `look` is assets/models/box/box.json. */
 class BlackBox {
-  constructor() {
+  constructor(look) {
+    this.scale = look.scale;
     const shells = MOBILE ? 14 : 30;
     this.root = new THREE.Group();
     this.squash = new THREE.Group(); this.root.add(this.squash);
     const cr = this.creature = new THREE.Group(); cr.rotation.order = 'YXZ'; cr.position.y = 1.07; this.squash.add(cr);
-    this.squash.scale.setScalar(BOX_S);
+    this.squash.scale.setScalar(this.scale);
 
-    const eyeR = this.eyeR = 0.3, eyeX = 0.41, eyeY = 0.2, eyeZ = 0.93;   // homepage layout: eyes up, mouth below
+    const E = look.eyes, eyeR = this.eyeR = E.size, eyeX = E.side, eyeY = E.height, eyeZ = E.front;   // homepage layout: eyes up, mouth below
     const C = (h) => new THREE.Color(h);
+    this.furRoot = [C(look.fur.root), C(look.fur.rootAtNight)];
     const U = this.U = {
-      uShells: { value: shells }, uLen: { value: 0.13 }, uDensity: { value: 4 },
+      uShells: { value: shells }, uLen: { value: look.fur.length }, uDensity: { value: look.fur.density },
       uTime: { value: 0 }, uPuff: { value: 0 }, uDroop: { value: 0.35 }, uRim: { value: 1.6 },
       uWind: { value: new THREE.Vector3() }, uGrav: { value: new THREE.Vector3(0, -1, 0) },
       uEyeL: { value: new THREE.Vector3(-eyeX, eyeY, eyeZ) }, uEyeR: { value: new THREE.Vector3(eyeX, eyeY, eyeZ) }, uEyeRad: { value: eyeR },
@@ -446,25 +449,25 @@ class BlackBox {
       uMRamp0: { value: 0 }, uMRamp1: { value: 0.11 }, uMFloor: { value: 0.2 }, uMCut: { value: 1 }, uMAO: { value: 0.7 },
       uTouch: { value: new THREE.Vector3(0, 0, 9) }, uTouchVel: { value: new THREE.Vector3() }, uTouchAmt: { value: 0 }, uTouchRad: { value: 0.38 },
       uNoise: { value: makeNoise() },
-      uRoot: { value: FURLIGHT.day.root.clone() }, uTip: { value: C('#e2bf98') },
+      uRoot: { value: this.furRoot[0].clone() }, uTip: { value: C(look.fur.tip) },
       uSky: { value: FURLIGHT.day.sky.clone() }, uGround: { value: FURLIGHT.day.ground.clone() },
       uKeyDir: { value: new THREE.Vector3(-0.55, 0.7, 0.55).normalize() }, uKeyCol: { value: FURLIGHT.day.key.clone() },
       uRimDir: { value: new THREE.Vector3(0.6, 0.5, -0.6).normalize() },
-      uIriA: { value: C('#CF6E42') }, uIriB: { value: C('#D6A446') }, uIriC: { value: C('#DE8053') },
+      uIriA: { value: C(look.fur.shimmer[0]) }, uIriB: { value: C(look.fur.shimmer[1]) }, uIriC: { value: C(look.fur.shimmer[2]) },
       uLampPos: { value: CANOPY.clone() }, uLampCol: { value: new THREE.Color(0, 0, 0) },
     };
     const furMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: FUR_VERT, fragmentShader: FUR_FRAG,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
       blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
-    const fur = new THREE.InstancedMesh(roundedCube(0.38, MOBILE ? 26 : 34), furMat, 64);
+    const fur = new THREE.InstancedMesh(roundedCube(look.roundness, MOBILE ? 26 : 34), furMat, 64);
     const I = new THREE.Matrix4(); for (let i = 0; i < 64; i++) fur.setMatrixAt(i, I);
     fur.count = shells; fur.frustumCulled = false; cr.add(fur);
     // shadow stand-in (the fur itself does not write shadow depth)
-    const caster = new THREE.Mesh(roundedCube(0.38, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+    const caster = new THREE.Mesh(roundedCube(look.roundness, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
     caster.castShadow = true; caster.scale.setScalar(1.05); cr.add(caster);
     // hit volume for taps and petting, a little bigger than the fur
-    this.proxy = new THREE.Mesh(roundedCube(0.38, 6), new THREE.MeshBasicMaterial({ visible: false }));
+    this.proxy = new THREE.Mesh(roundedCube(look.roundness, 6), new THREE.MeshBasicMaterial({ visible: false }));
     this.proxy.scale.setScalar(1.14); cr.add(this.proxy);
 
     const lidU = {}; ['uNoise', 'uRim', 'uRoot', 'uTip', 'uSky', 'uGround', 'uKeyDir', 'uKeyCol', 'uIriA', 'uLampPos', 'uLampCol'].forEach((k) => (lidU[k] = U[k]));
@@ -474,9 +477,9 @@ class BlackBox {
     const pupilGeo = new THREE.SphereGeometry(eyeR * 1.006, 40, 8, 0, Math.PI * 2, 0, 0.6); pupilGeo.rotateX(Math.PI / 2);
     const upGeo = new THREE.SphereGeometry(eyeR * 1.07, 40, 14, 0, Math.PI * 2, 0, Math.PI / 2);
     const loGeo = new THREE.SphereGeometry(eyeR * 1.07, 40, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    const scleraMat = new THREE.MeshPhongMaterial({ color: 0xeeedf3, specular: 0xffffff, shininess: 110, emissive: 0x2a2838 });
-    const irisMat = new THREE.MeshPhongMaterial({ color: 0x24203a, specular: 0x888888, shininess: 90 });
-    const pupilMat = new THREE.MeshPhongMaterial({ color: 0x030305, specular: 0xaaaaaa, shininess: 160 });
+    const scleraMat = new THREE.MeshPhongMaterial({ color: E.white, specular: 0xffffff, shininess: 110, emissive: 0x2a2838 });
+    const irisMat = new THREE.MeshPhongMaterial({ color: E.iris, specular: 0x888888, shininess: 90 });
+    const pupilMat = new THREE.MeshPhongMaterial({ color: E.pupil, specular: 0xaaaaaa, shininess: 160 });
     const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
     const glintGeo = new THREE.SphereGeometry(0.032, 14, 10);
     this.eyes = [-1, 1].map((side) => {
@@ -494,9 +497,9 @@ class BlackBox {
     // ── the homepage face: crater mouths cut into the pelt, pink lips, teeth; one per expression ──
     const faceG = new THREE.Group(); cr.add(faceG);
     const LS = 0.75, LR = 0.045 * LS, LZ = 0.15 * LR, DEEP = -0.13;
-    const lipMat = new THREE.MeshPhysicalMaterial({ color: 0xE7A1B4, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.12, emissive: 0x2a1219, sheen: 1, sheenColor: new THREE.Color(0xffd6e0), sheenRoughness: 0.4 });
-    const holeMat = new THREE.MeshBasicMaterial({ color: 0x030205, side: THREE.DoubleSide });
-    const toothMat = new THREE.MeshPhysicalMaterial({ color: 0xC4BECB, roughness: 0.4, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+    const lipMat = new THREE.MeshPhysicalMaterial({ color: look.mouth.lips, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.12, emissive: 0x2a1219, sheen: 1, sheenColor: new THREE.Color(0xffd6e0), sheenRoughness: 0.4 });
+    const holeMat = new THREE.MeshBasicMaterial({ color: look.mouth.inside, side: THREE.DoubleSide });
+    const toothMat = new THREE.MeshPhysicalMaterial({ color: look.mouth.teeth, roughness: 0.4, clearcoat: 0.5, clearcoatRoughness: 0.3 });
     const V2 = (x, y) => new THREE.Vector2(x, y);
     const plate = (g, cx, cy, w, h) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), holeMat); m.position.set(cx, cy, DEEP); g.add(m); };
     const addTube = (g, curve, r, z, closed) => {
@@ -593,7 +596,7 @@ class BlackBox {
     U.uSky.value.copy(D.sky).lerp(N.sky, n);
     U.uGround.value.copy(D.ground).lerp(N.ground, n);
     U.uKeyCol.value.copy(D.key).lerp(N.key, n);
-    U.uRoot.value.copy(D.root).lerp(N.root, n);
+    U.uRoot.value.copy(this.furRoot[0]).lerp(this.furRoot[1], n);
     U.uRim.value = lerp(D.rim, N.rim, n);
     U.uLampCol.value.set(GLOW_COLOR).multiplyScalar(lampK);
   }
@@ -644,7 +647,7 @@ class BlackBox {
     let sy = (1 + br + st.puff * 0.035) * (1 + q) * (1 + st.stretch);
     const pk = (t - this.pokeAt) / 0.25;    // poke: squash then stretch, ~250ms
     if (pk >= 0 && pk < 1) { const qq = Math.sin(pk * Math.PI * 2) * (1 - pk) * 0.24; sy *= 1 - qq; sx *= 1 + qq * 0.55; }
-    this.squash.scale.set(BOX_S * sx, BOX_S * sy, BOX_S * sx);
+    this.squash.scale.set(this.scale * sx, this.scale * sy, this.scale * sx);
     // lean forward in flight, back while crouching
     st.lean = ease(st.lean, airU >= 0 ? 0.12 * Math.sin(airU * Math.PI) : (h ? -0.06 : 0), 14, dt);
     this.creature.rotation.x = st.lean;
@@ -843,14 +846,18 @@ async function boot() {
   world.lights = { hemi, key, rim, fill };
 
   const loader = new GLTFLoader();
-  const files = ['environment', 'pupu'];
-  const [yaga, broom, worldJson, wordsJson, , ...loaded] = await Promise.all([
-    loader.loadAsync('./assets/models/yaga-dressed.glb'),
-    loader.loadAsync('./assets/models/broom.glb'),   // a prop in her hand, like the shovel
-    fetch('./assets/worlds/home.json').then((r) => r.json()),
-    fetch('./words/en.json').then((r) => r.json()),
-    loadBoxModels(['hen', 'egg', 'pumpkin', 'cabbage', 'shovel']),   // kept in box-model.js, built by name
-    ...files.map((f) => loader.loadAsync(`./assets/models/${f}.glb`)),
+  const files = ['environment', 'pupu'], folder = { environment: 'environment', pupu: 'yaga' };
+  const [yaga, broom, worldJson, wordsJson, boxLook, houseLook, , , , ...loaded] = await Promise.all([
+    loader.loadAsync('./assets/models/yaga/yaga-dressed.glb'),
+    loader.loadAsync('./assets/models/tools/broom.glb'),   // a prop in her hand, like the shovel
+    getJSON('./assets/world/home.json'),
+    getJSON('./words/en.json'),
+    getJSON('./assets/models/box/box.json'),
+    getJSON('./assets/models/environment/house.json'),
+    loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel']),   // these three keep what they load in their own modules (the three empty slots above)
+    loadBlocks(),
+    loadBugLooks(),
+    ...files.map((f) => loader.loadAsync(`./assets/models/${folder[f]}/${f}.glb`)),
   ]);
   useWords(wordsJson); labelPage();
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -865,7 +872,7 @@ async function boot() {
   scene.add(env);
   const tree = shrinkTree(env);
   buildScenery(env, tree);
-  buildHouse();
+  buildHouse(houseLook);
   buildDayNight(env);
   buildMountains(env);
 
@@ -879,7 +886,7 @@ async function boot() {
   pet = new YagaPet(yaga, broom);
   pet.root.position.set(SPAWN.x, groundY(SPAWN.x, SPAWN.z), SPAWN.z);
   scene.add(pet.root);
-  Box.pet = new BlackBox();
+  Box.pet = new BlackBox(boxLook);
   Box.pet.root.position.set(1.9, groundY(1.9, 1.9), 1.9);
   scene.add(Box.pet.root);
 
@@ -1057,20 +1064,22 @@ function applyPhase(n) {
 const HOUSE = { x: -3.6, z: -5.2 };                 // near the middle of the field
 const HOUSE_DOOR = { x: HOUSE.x, z: HOUSE.z + 2.9 };  // where she stands at the foot of the ladder
 
-function buildHouse() {
-  const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o });
+/** Builds the hut. `look` is assets/models/environment/house.json: its colours, overall size and how many log rows high the walls are. */
+function buildHouse(look) {
+  const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...o }), C = look.colours;
   const M = {
-    logA: mat(0x6b4532), logB: mat(0x7a5038), dark: mat(0x3e2a1f), roof: mat(0x3a2a20, { roughness: 1 }),
-    gable: mat(0x5a3a2a), moss: mat(0x56633A, { roughness: 1 }), stone: mat(0x9a7a60), red: mat(0xB32A1F),
-    gold: mat(0xD6A446, { roughness: 0.5, metalness: 0.2 }), skin: mat(0xD6A446, { roughness: 0.6 }), feather: mat(0x8a5a3a, { roughness: 1 }),
-    glass: mat(0x2a1d14, { emissive: new THREE.Color(0xE9B65A), emissiveIntensity: 0.15 }),
-    smoke: new THREE.MeshStandardMaterial({ color: 0xF0EADC, transparent: true, opacity: 0, roughness: 1, depthWrite: false }),
+    logA: mat(C.logs), logB: mat(C.logsAlternate), dark: mat(C.darkWood), roof: mat(C.roof, { roughness: 1 }),
+    gable: mat(C.gables), moss: mat(C.moss, { roughness: 1 }), stone: mat(C.chimney), red: mat(C.trim),
+    gold: mat(C.gold, { roughness: 0.5, metalness: 0.2 }), skin: mat(C.legs, { roughness: 0.6 }), feather: mat(C.feathers, { roughness: 1 }),
+    glass: mat(C.windows, { emissive: new THREE.Color(C.windowGlow), emissiveIntensity: 0.15 }),
+    smoke: new THREE.MeshStandardMaterial({ color: C.smoke, transparent: true, opacity: 0, roughness: 1, depthWrite: false }),
   };
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz);
     o.castShadow = true; o.receiveShadow = true; parent.add(o); return o;
   };
-  const root = new THREE.Group(); root.position.set(HOUSE.x, 0, HOUSE.z); scene.add(root);
+  const root = new THREE.Group(); root.position.set(HOUSE.x, 0, HOUSE.z); root.scale.setScalar(look.size); scene.add(root);
+  HOUSE_DOOR.z = HOUSE.z + 2.9 * look.size;                                  // the foot of the ladder moves with the hut's size
   const body = new THREE.Group(); body.position.y = 1.75; root.add(body);   // everything the legs carry
 
   // chicken legs: thigh, knee, shin, toes
@@ -1089,7 +1098,7 @@ function buildHouse() {
 
   // floor and log walls (8 rows; corner ends stick out)
   add(body, new THREE.BoxGeometry(3.3, 0.16, 2.5), M.dark, 0, 0, 0);
-  const R = 0.14, rows = 8, logX = new THREE.CylinderGeometry(R, R, 3.35, 10), logZ = new THREE.CylinderGeometry(R, R, 2.55, 10);
+  const R = 0.14, rows = look.logRows, logX = new THREE.CylinderGeometry(R, R, 3.35, 10), logZ = new THREE.CylinderGeometry(R, R, 2.55, 10);
   for (let i = 0; i < rows; i++) {
     const y = 0.16 + R + i * R * 2, m = i % 2 ? M.logA : M.logB;
     add(body, logX, m, 0, y, 1.1, 0, 0, Math.PI / 2); add(body, logX, m, 0, y + R * 0.15, -1.1, 0, 0, Math.PI / 2);
@@ -1132,8 +1141,8 @@ function buildHouse() {
   [-0.3, 0.3].forEach((x) => add(ladder, new THREE.BoxGeometry(0.07, len, 0.07), M.dark, x, 0.875, 0.5, -tilt, 0, 0));   // leaning in: top at the door
   for (let i = 1; i < 6; i++) { const k = i / 6; add(ladder, new THREE.BoxGeometry(0.6, 0.05, 0.08), M.logB, 0, 1.75 * (1 - k), 1.0 * k); }
 
-  const glow = new THREE.PointLight(0xE9B65A, 0, 9, 1.8); glow.position.set(0, 3.0, 2.2); root.add(glow);
-  OBSTACLES.push({ x: HOUSE.x, z: HOUSE.z, r: 1.9 + BODY_R });
+  const glow = new THREE.PointLight(C.windowGlow, 0, 9, 1.8); glow.position.set(0, 3.0, 2.2); root.add(glow);
+  OBSTACLES.push({ x: HOUSE.x, z: HOUSE.z, r: 1.9 * look.size + BODY_R });
   world.landmarks.push({ x: HOUSE_DOOR.x, z: HOUSE_DOOR.z });
   world.house = { root, body, legs, windows, glass: M.glass, glow, smoke, stompAt: -9, wallTop };
 }

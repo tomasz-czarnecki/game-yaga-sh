@@ -1,0 +1,6 @@
+{
+  "about": "Field: crop rows. Rows alternate between 'top' and 'top2'. Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
+  "top": "#3a2f27",
+  "top2": "#4f5a30",
+  "side": "#2f261f"
+}

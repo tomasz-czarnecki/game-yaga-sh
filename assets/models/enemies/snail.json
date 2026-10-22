@@ -1,0 +1,12 @@
+{
+  "about": "The snail. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'opening' is the body you see filling the mouth of the shell.",
+  "size": 1,
+  "colours": {
+    "skin": "#F5C49A",
+    "shell": "#E3A93A",
+    "stripe": "#F7E6C4",
+    "opening": "#E0A67E",
+    "eyes": "#F7EFE4",
+    "pupils": "#130C1B"
+  }
+}

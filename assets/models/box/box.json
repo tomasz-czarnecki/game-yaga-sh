@@ -1,0 +1,27 @@
+{
+  "about": "The black box, Yaga's furry sidekick. In its own units the cube is 2 across; 'scale' turns that into metres (0.2 makes it 0.4 m, ankle-high to her). 'roundness' is how round its corners are (0 sharp, 1 a ball). Fur 'length' is in the same units, 'density' is how fine the fur pattern is. Eyes: 'size' is their radius, 'side' how far each sits from the middle, 'height' above the middle, 'front' how far forward. Colours are hex; the fur goes from 'root' (by day, and 'rootAtNight') to 'tip', with a 'shimmer' of three colours. The mouth shapes are in code. Edit, save and reload the page.",
+  "scale": 0.2,
+  "roundness": 0.38,
+  "fur": {
+    "length": 0.13,
+    "density": 4,
+    "root": "#1a1714",
+    "rootAtNight": "#151210",
+    "tip": "#e2bf98",
+    "shimmer": ["#CF6E42", "#D6A446", "#DE8053"]
+  },
+  "eyes": {
+    "size": 0.3,
+    "side": 0.41,
+    "height": 0.2,
+    "front": 0.93,
+    "white": "#eeedf3",
+    "iris": "#24203a",
+    "pupil": "#030305"
+  },
+  "mouth": {
+    "lips": "#E7A1B4",
+    "teeth": "#C4BECB",
+    "inside": "#030205"
+  }
+}

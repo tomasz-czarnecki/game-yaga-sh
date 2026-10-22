@@ -1,0 +1,5 @@
+{
+  "about": "Grass. Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
+  "top": "#4b5632",
+  "side": "#3d3027"
+}

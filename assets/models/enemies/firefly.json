@@ -1,0 +1,14 @@
+{
+  "about": "The firefly. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'lanternGlow' is the colour its lantern shines with.",
+  "size": 1,
+  "colours": {
+    "shell": "#3E2C44",
+    "edges": "#EBD9AE",
+    "shield": "#F08848",
+    "body": "#221829",
+    "lantern": "#FFD86B",
+    "eyes": "#F7EFE4",
+    "pupils": "#130C1B",
+    "lanternGlow": "#F4C24E"
+  }
+}

@@ -22,7 +22,7 @@ export function stageOf(plot, now = Date.now()) {
   return s >= GROW.ripe ? 2 : s >= GROW.young ? 1 : 0;
 }
 
-/** A crop at a growth stage, standing on the ground at the origin (a block is 0.5 m wide). Its boxes are in assets/boxes/pumpkin.json and cabbage.json. */
+/** A crop at a growth stage, standing on the ground at the origin (a block is 0.5 m wide). Its boxes are in assets/models/plants/pumpkin.json and cabbage.json. */
 export function makeCrop(kind, stage) {
-  return buildBoxModel(kind, 0, stage).group;
+  return buildBoxModel(`plants/${kind}`, 0, stage).group;
 }

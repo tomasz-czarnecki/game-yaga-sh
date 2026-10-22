@@ -1,0 +1,5 @@
+{
+  "about": "Dirt: plain earth, and the flat ground around the map. Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
+  "top": "#5b4a3b",
+  "side": "#3d3027"
+}

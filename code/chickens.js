@@ -1,5 +1,5 @@
 // The hens and their eggs: small box birds in the chunky style of the terrain.
-// Their looks are in assets/boxes/hen.json and egg.json; this file only moves the parts.
+// Their looks are in assets/models/animals/hen.json and egg.json; this file only moves the parts.
 import * as THREE from './lib/three.module.js';
 import { buildBoxModel } from './box-model.js';
 
@@ -8,7 +8,7 @@ const HURT = new THREE.Color(0xB32A1F);
 /** A hen about 0.45 m long, facing +z, standing on the ground at the origin. `variant` picks her feather colour.
  *  Returns its group and `tick(t, walk, peck, hurt)`: walk 0…2 swings the legs, peck 0…1 dips the head, hurt flashes it red. */
 export function makeChicken(variant = 0) {
-  const { group, parts, mats } = buildBoxModel('hen', variant);
+  const { group, parts, mats } = buildBoxModel('animals/hen', variant);
   const { body, head, tail, legL, legR } = parts;
   const bodyY = body.position.y, headZ = head.position.z;
   const tick = (t, walk, peck, hurt) => {
@@ -24,5 +24,5 @@ export function makeChicken(variant = 0) {
 
 /** An egg, standing on the ground at the origin. */
 export function makeEgg() {
-  return buildBoxModel('egg').group;
+  return buildBoxModel('animals/egg').group;
 }

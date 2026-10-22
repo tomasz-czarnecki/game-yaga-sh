@@ -1,0 +1,11 @@
+{
+  "about": "The ladybug. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'eyes' also colours the two pale patches behind its head.",
+  "size": 1,
+  "colours": {
+    "shell": "#E23A2B",
+    "body": "#2A1C3A",
+    "spots": "#150D20",
+    "eyes": "#F7EFE4",
+    "pupils": "#130C1B"
+  }
+}

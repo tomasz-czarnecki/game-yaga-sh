@@ -1,0 +1,21 @@
+{
+  "about": "Her hut on chicken legs. 'size' scales the whole hut (1 = as designed); the spot at the foot of the ladder and the space she walks around move with it. 'logRows' is how many logs high the walls are (the roof sits on top). Colours are hex: 'darkWood' is the floor, door, window frames and ladder sides; 'gold' is the door knob and the embroidery; 'windowGlow' is the warm light in the windows at night. Where the hut stands, and the shape of its legs and ladder, are in code. Edit, save and reload the page.",
+  "size": 1,
+  "logRows": 8,
+  "colours": {
+    "logs": "#6b4532",
+    "logsAlternate": "#7a5038",
+    "darkWood": "#3e2a1f",
+    "roof": "#3a2a20",
+    "gables": "#5a3a2a",
+    "moss": "#56633A",
+    "chimney": "#9a7a60",
+    "trim": "#B32A1F",
+    "gold": "#D6A446",
+    "legs": "#D6A446",
+    "feathers": "#8a5a3a",
+    "windows": "#2a1d14",
+    "windowGlow": "#E9B65A",
+    "smoke": "#F0EADC"
+  }
+}

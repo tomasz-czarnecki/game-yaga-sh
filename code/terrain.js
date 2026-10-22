@@ -1,23 +1,23 @@
-// Box terrain for the Yaga game: a grid of columns described by assets/worlds/*.json, the format a future
-// generator writes too. One merged mesh holds every visible top and side; water is its own mesh.
+// Box terrain for the Yaga game: a grid of columns described by assets/world/home.json, the format a future
+// generator writes too. How each kind of block looks is in assets/world/blocks/<kind>.json. One merged mesh holds every visible top and side; water is its own mesh.
 // Heights in the JSON count blocks of `step` metres; everything here works in world metres.
 import * as THREE from './lib/three.module.js';
 
-// dark fantasy, drawn from her clothes: umber earth, moss like her skirt, charcoal like her hoodie.
-// Dirt's top matches DAY.ground in app.js (the night tint is worked out from it). Field rows alternate soil and green (top2)
-const TYPES = {
-  dirt: { top: 0x5b4a3b, side: 0x3d3027 },
-  grass: { top: 0x4b5632, side: 0x3d3027 },
-  field: { top: 0x3a2f27, top2: 0x4f5a30, side: 0x2f261f },
-  road: { top: 0x6d5f52, side: 0x4a4037 },
-  sand: { top: 0x85785f, side: 0x5f5443 },
-  stone: { top: 0x5d5b5c, side: 0x3b3a3c },
-  tilled: { top: 0x3b2b21, top2: 0x2c2019, side: 0x2f261f },   // farmland she dug: dark furrows, alternating by row
-};
-const PALETTE = Object.fromEntries(Object.entries(TYPES).map(([k, t]) => [k, {
-  top: new THREE.Color(t.top), top2: new THREE.Color(t.top2 ?? t.top), side: new THREE.Color(t.side),
-}]));
-const WATER = { color: new THREE.Color(0x2c4f55), opacity: 0.72, drop: 0.1 };   // surface sits `drop` below the shore
+// The colours are dark fantasy, drawn from her clothes: umber earth, moss like her skirt, charcoal like her hoodie.
+// Dirt's top matches DAY.ground in app.js (the night tint is worked out from it).
+const BLOCKS = ['dirt', 'grass', 'field', 'road', 'sand', 'stone', 'farmland'];   // solid kinds; water is a surface, not a block
+let PALETTE, WATER;
+
+/** Fetches how each block looks; call at boot, before loadWorld. A new kind needs its file and a place in BLOCKS. */
+export async function loadBlocks() {
+  const read = (name) => fetch(`./assets/world/blocks/${name}.json`).then((r) => r.json())
+    .catch((e) => { throw new Error(`assets/world/blocks/${name}.json: ${e.message}`); });   // say which file has the typo
+  const [water, ...solid] = await Promise.all(['water', ...BLOCKS].map(read));
+  PALETTE = Object.fromEntries(BLOCKS.map((name, i) => [name, {
+    top: new THREE.Color(solid[i].top), top2: new THREE.Color(solid[i].top2 ?? solid[i].top), side: new THREE.Color(solid[i].side),
+  }]));
+  WATER = { color: new THREE.Color(water.colour), opacity: water.opacity, drop: water.drop };   // surface sits `drop` below the shore
+}
 const OUTER = 130;                                  // flat dirt beyond the map reaches this far
 let grid = null;
 
@@ -143,7 +143,7 @@ export function groundY(x, z) {
   return k < 0 ? 0 : grid.top[k];
 }
 
-/** The type of the block under a point ('dirt', 'grass', 'tilled'…; a pond's bed reads as 'sand'), '' beyond the map. */
+/** The type of the block under a point ('dirt', 'grass', 'farmland'…; a pond's bed reads as 'sand'), '' beyond the map. */
 export function kindAt(x, z) {
   const k = cellAt(x, z);
   return k < 0 ? '' : grid.kind[k];
@@ -155,12 +155,12 @@ export function blockCentre(x, z) {
   return { x: grid.ox + (Math.floor((x - grid.ox) / s) + 0.5) * s, z: grid.oz + (Math.floor((z - grid.oz) / s) + 0.5) * s };
 }
 
-/** Digs a block into farmland: its type becomes 'tilled' and only its own four vertices are recoloured. */
+/** Digs a block into farmland: its kind becomes 'farmland' and only its own four vertices are recoloured. */
 export function tillCell(x, z) {
   const k = cellAt(x, z);
   if (k < 0) return;
-  grid.kind[k] = 'tilled';
-  const t = PALETTE.tilled, c = new THREE.Color().copy((((k / grid.cols) | 0) % 2) ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05));
+  grid.kind[k] = 'farmland';
+  const t = PALETTE.farmland, c = new THREE.Color().copy((((k / grid.cols) | 0) % 2) ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05));
   for (let v = 0; v < 4; v++) grid.colors.setXYZ(grid.topVert[k] + v, c.r, c.g, c.b);
   grid.colors.needsUpdate = true;
 }

@@ -1,0 +1,5 @@
+{
+  "about": "Stone. Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
+  "top": "#5d5b5c",
+  "side": "#3b3a3c"
+}
