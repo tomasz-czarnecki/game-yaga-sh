@@ -1,6 +1,6 @@
 // Yaga Game: Pani Yaga living in the clearing. She hunts bugs, sleeps under the tree at night
 // and complains about everything. World and brain come from the whybox.ai pet game; the black box
-// creature is replaced by the rigged, dressed 3D Pani Yaga (assets/pani-yaga-dressed.glb).
+// creature is replaced by the rigged, dressed 3D Pani Yaga (assets/models/pani-yaga-dressed.glb).
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { BUGS, makeBug } from './bug-models.js';
@@ -821,9 +821,9 @@ async function boot() {
   const loader = new GLTFLoader();
   const files = ['environment', 'pupu'];
   const [yaga, worldJson, ...loaded] = await Promise.all([
-    loader.loadAsync('./assets/pani-yaga-dressed.glb'),
-    fetch('./worlds/home.json').then((r) => r.json()),
-    ...files.map((f) => loader.loadAsync(`./assets/${f}.glb`)),
+    loader.loadAsync('./assets/models/pani-yaga-dressed.glb'),
+    fetch('./assets/worlds/home.json').then((r) => r.json()),
+    ...files.map((f) => loader.loadAsync(`./assets/models/${f}.glb`)),
   ]);
   const dress = (obj) => obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 

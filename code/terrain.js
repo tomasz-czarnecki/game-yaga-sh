@@ -1,4 +1,4 @@
-// Box terrain for the Yaga game: a grid of columns described by worlds/*.json, the format a future
+// Box terrain for the Yaga game: a grid of columns described by assets/worlds/*.json, the format a future
 // generator writes too. One merged mesh holds every visible top and side; water is its own mesh.
 // Heights in the JSON count blocks of `step` metres; everything here works in world metres.
 import * as THREE from './lib/three.module.js';
