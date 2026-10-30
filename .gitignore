@@ -1,9 +1,22 @@
 # Local tooling
 .claude/
 .vercel/
+node_modules/
+__pycache__/
+
+# The owner's Blender sources and drafts
+manual_uploads/
+
+# Scratch and test output
+scratch/
+tmp/
+screenshots/
+shots/
+*.log
 
 # OS / editor
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 

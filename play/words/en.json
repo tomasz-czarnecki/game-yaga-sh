@@ -248,12 +248,6 @@
       "missed me? obviously."
     ]
   },
-  "house": [
-    "home sweet hut.",
-    "the legs were cheaper than stairs.",
-    "don't look at the dishes.",
-    "it ate the last postman."
-  ],
   "defendBox": [
     "leave my box alone.",
     "don't touch the box. it bites.",
@@ -359,46 +353,22 @@
   },
   "bugs": {
     "ladybug": {
-      "name": "ladybug",
-      "a": "a ladybug",
-      "plural": "ladybugs",
-      "bug": "off-by-one",
-      "line": "seven spots. you counted six."
+      "name": "ladybug"
     },
     "firefly": {
-      "name": "firefly",
-      "a": "a firefly",
-      "plural": "fireflys",
-      "bug": "heisenbug",
-      "line": "only glows when you're not looking."
+      "name": "firefly"
     },
     "caterpillar": {
-      "name": "caterpillar",
-      "a": "a caterpillar",
-      "plural": "caterpillars",
-      "bug": "infinite loop",
-      "line": "segments all the way down."
+      "name": "caterpillar"
     },
     "snail": {
-      "name": "snail",
-      "a": "a snail",
-      "plural": "snails",
-      "bug": "slow query",
-      "line": "still loading. please hold."
+      "name": "snail"
     },
     "ant": {
-      "name": "ant",
-      "a": "an ant",
-      "plural": "ants",
-      "bug": "race condition",
-      "line": "there is never just one."
+      "name": "ant"
     },
     "beetle": {
-      "name": "jewel beetle",
-      "a": "a jewel beetle",
-      "plural": "jewel beetles",
-      "bug": "hallucination",
-      "line": "looks real. isn't."
+      "name": "jewel beetle"
     }
   },
   "ui": {
@@ -557,8 +527,8 @@
     "plusCoins": "+{n} coins",
     "soundOff": "Sound off",
     "soundOn": "Sound on",
-    "home": "Back to Yaga Labs",
-    "homeText": "YagaLabs",
+    "home": "Back to the Yaga homepage",
+    "homeText": "Home",
     "loading": "Waking Yaga",
     "away": {
       "minute": ["minute", "minutes"],

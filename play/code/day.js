@@ -6,7 +6,7 @@ import { overnight, atRisk } from './farm.js';
 
 export const HOUR = SET.day.length / 24;                    // seconds in one game hour
 export const WAKE = SET.day.wakeHour;
-export const DUSK = SET.day.nightStarts;
+const DUSK = SET.day.nightStarts;
 export const PASS_OUT = 24 + SET.day.passOutHour;
 const P = SET.pests;
 

@@ -1,0 +1,7 @@
+# Not needed to serve the site. Paths start at the repo root.
+/CLAUDE.md
+/README.md
+/docs
+/tools
+/manual_uploads
+/.gitignore

@@ -1,326 +1,121 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="icon" href="./assets/images/yaga-face.png"></head><body>
-<title>Game · Yaga Labs</title><!-- the tab title until the words load; words/en.json "ui.title" replaces it -->
-<!-- start the downloads at once: her model (the biggest file; keep this path in step with boot() in code/app.js) and the code
-     that would otherwise arrive one file after another -->
-<link rel="preload" href="./assets/models/yaga/yaga-dressed.glb" as="fetch" crossorigin>
-<link rel="modulepreload" href="./code/app.js">
-<link rel="modulepreload" href="./code/lib/three.module.js">
-<link rel="modulepreload" href="./code/lib/three.core.js">
-<link rel="modulepreload" href="./code/lib/loaders/GLTFLoader.js">
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Yaga: a witch's farm game you play in the browser</title>
+<meta name="description" content="Yaga is a witch whose hut stands on chicken legs. Dig, plant, water, harvest, sell at her market stall, keep hens and swat night pests with her broom. Free, in your browser, on a phone or a computer.">
+<meta name="theme-color" content="#151412">
+<link rel="canonical" href="https://game.yaga.sh/">
+<link rel="icon" href="site/favicon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Yaga Labs">
+<meta property="og:url" content="https://game.yaga.sh/">
+<meta property="og:title" content="Yaga: a witch's farm game">
+<meta property="og:description" content="Three hundred years of magic, and the pumpkins still want watering. Farm by day, swat pests by night, in your browser.">
+<meta property="og:image" content="https://game.yaga.sh/site/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="image" href="site/hero-tall.webp" media="(max-width: 799px)" fetchpriority="high">
+<link rel="preload" as="image" href="site/hero-wide.webp" media="(min-width: 800px)" fetchpriority="high">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- the font loads without holding up the page: the loading screen shows at once in the fallback font -->
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Geist+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<style>
-  /* One screen, one world: the clearing fills the viewport, the care tray docks in the thumb zone. */
-  :root {
-    --void: #151412;        /* the homepage's deep brown */
-    --cream: #F0EADC;       /* the homepage ink */
-    --gold: #D6A446;        /* the homepage gold: counts and alerts */
-    --accent: #CF6E42;      /* the homepage terracotta */
-    --hp: #C8442F;          /* health: the red of her hair and the hut's door trim */
-    --mana: #6277D6;        /* mana: a dusk indigo */
-    --stam: #86A24A;        /* stamina: moss, like her skirt */
-    --ink: #1A1814;         /* thought-bubble outline, from the website */
-    --paper: #FCFBF8;       /* thought-bubble fill, from the website */
-    --glass: rgba(28, 26, 23, 0.74);
-    --line: rgba(240, 234, 220, 0.18);
-    --btn: clamp(46px, 12.6vw, 60px);
-    --display: 'Geist', system-ui, sans-serif;
-    --mono: 'Geist Mono', ui-monospace, Menlo, monospace;
-    color-scheme: dark;
-  }
-  html, body { height: 100%; }
-  body {
-    margin: 0; overflow: hidden; background: var(--void); color: var(--cream);
-    font-family: var(--display); -webkit-user-select: none; user-select: none;
-    -webkit-tap-highlight-color: transparent; touch-action: none;
-  }
-  #stage { position: fixed; inset: 0; }
-  #stage canvas { display: block; touch-action: none; }
-  .vignette { position: fixed; inset: 0; pointer-events: none; }
-  .vignette { background: radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 40%, rgba(4,3,8,0.55) 100%); }
+<!-- the font loads without holding up the page, as in the game -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="site/home.css">
+</head>
+<body>
 
-  /* top left: her portrait, then her coins and bars beside it; under them her bag and the next goal */
-  .side {
-    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: calc(100% - 150px);
-  }
-  .head { display: flex; align-items: center; gap: 10px; }
-  .portrait {
-    width: 72px; height: 72px; flex: none; border-radius: 50%; object-fit: cover; pointer-events: none;
-    background: var(--glass); border: 2px solid var(--accent); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  }
-  .status {
-    display: grid; gap: 6px; width: clamp(112px, 26vw, 180px); padding: 8px 10px; border-radius: 16px;
-    background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  }
-  .coins { display: flex; align-items: center; gap: 6px; font: 600 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--gold); }
-  .coins svg { width: 16px; height: 16px; flex: none; }
-  .coins.pop b { animation: coinpop 0.5s ease-out; display: inline-block; }
-  @keyframes coinpop { 30% { transform: scale(1.35); color: #fff3cf; } }
-  .vital { display: grid; grid-template-columns: 16px 1fr; align-items: center; gap: 6px; }
-  .vital.mana { --c: var(--mana); } .vital.stam { --c: var(--stam); }
-  .vital svg { width: 16px; height: 16px; display: block; fill: var(--c); }
-  .vital .bar { height: 9px; border-radius: 999px; background: rgba(240, 234, 220, 0.12); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
-  .vital .bar i { display: block; height: 100%; width: 50%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--c) 62%, #000), var(--c)); transition: width 0.25s ease; }
-  .vital.low .bar i { animation: lowpulse 1.1s ease-in-out infinite; }
-  @keyframes lowpulse { 50% { opacity: 0.45; } }
-  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pill {
-    display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; cursor: pointer;
-    background: var(--glass); border: 1px solid var(--line); color: var(--cream); font: 500 12px/1.2 var(--mono);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); max-width: 100%;
-  }
-  .pill svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pill:focus-visible, .slot:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-  #goalPill { color: var(--gold); }
-  /* phones: a smaller portrait and the goal pill without its text */
-  @media (max-width: 640px) { .portrait { width: 52px; height: 52px; } #goalPill span { max-width: 46vw; } }
-  @media (max-width: 420px) { .status { width: 92px; padding: 7px 8px; } .head { gap: 8px; } }   /* clear of the clock */
-
-  /* day clock, top right next to the sound button: the day's number and the time (a day lasts 5 minutes) */
-  .clock {
-    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 66px;
-    height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 4px; border-radius: 999px; box-sizing: border-box;
-    background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
-  }
-  .clock svg { width: 36px; height: 36px; display: block; flex: none; }
-  .clock .tx { display: grid; gap: 3px; }
-  .clock b { font: 500 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--cream); letter-spacing: 0.02em; }
-  .clock span { font: 500 10px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(240, 234, 220, 0.62); }
-  .clock.night b { color: #C9C3B1; }
-  @media (max-width: 600px) { .clock { padding: 0 10px 0 3px; gap: 4px; } .clock svg { width: 30px; height: 30px; } .clock b { font-size: 13px; } }
-
-  .round {
-    position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px;
-    width: 44px; height: 44px; border-radius: 50%; padding: 0; cursor: pointer;
-    background: var(--glass); border: 1px solid var(--line); color: var(--cream);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: grid; place-items: center;
-  }
-  .round svg { width: 20px; height: 20px; }
-
-  /* little effects: hearts, sleep z's, sparkles */
-  #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-  .fx { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
-  .heart { width: 26px; height: 26px; animation: rise 1.3s ease-out forwards; }
-  .zz { font: 800 26px/1 var(--display); color: var(--cream); -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke; animation: drift 2.6s ease-out forwards; }
-  .spark { width: 18px; height: 18px; animation: burst 0.7s ease-out forwards; }
-  .plus { font: 700 15px/1 var(--mono); color: var(--gold); -webkit-text-stroke: 1px var(--ink); paint-order: stroke; white-space: nowrap; animation: rise 1.4s ease-out forwards; }
-  @keyframes rise { from { opacity: 0; translate: 0 0; scale: 0.4; } 15% { opacity: 1; scale: 1; } to { opacity: 0; translate: var(--dx, 0px) -90px; scale: 0.9; } }
-  @keyframes drift { from { opacity: 0; translate: 0 0; scale: 0.5; } 20% { opacity: 1; } to { opacity: 0; translate: 36px -110px; scale: 1.3; } }
-  @keyframes burst { from { opacity: 1; translate: 0 0; scale: 0.3; } to { opacity: 0; translate: var(--dx) var(--dy); scale: 1; rotate: 90deg; } }
-
-  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; background: var(--void); transition: opacity 0.6s ease; }
-  #loading .box { width: 64px; height: 64px; border-radius: 30%; background: #2a241f; box-shadow: 0 0 60px rgba(207,110,66,0.45); animation: breathe 1.4s ease-in-out infinite; }
-  #loading.gone { opacity: 0; pointer-events: none; }
-  /* what is loading: the bar, the file now, the count, the last few that finished (code/loading.js fills them in) */
-  #loading .info { width: min(320px, calc(100% - 32px)); font: 500 12px/1.6 var(--mono); color: var(--cream); }
-  #loading .title { margin: 0 0 12px; font: 700 18px/1.2 var(--display); text-align: center; }
-  #loading .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-  #loading .bar i { display: block; width: 0; height: 100%; background: var(--gold); transition: width 0.3s ease; }
-  #loading .bar.wait i { width: 35%; animation: shimmer 1.2s ease-in-out infinite; }   /* before the code runs: no numbers yet */
-  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
-  #loading .now { margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #loading .row { display: flex; justify-content: space-between; gap: 12px; margin: 0; }
-  #loading .tally, #loading .files { margin: 0; opacity: 0.55; }
-  #loading .files { min-height: 6.4em; margin-top: 6px; padding: 0; list-style: none; }
-  @keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.08, 0.92) translateY(3px); } }
-  #oops { position: fixed; inset: auto 16px 50% 16px; text-align: center; font: 700 18px/1.4 var(--display); }
-
-  /* the speech cloud: the homepage's typewriter thought, same ink and paper */
-  #say, #saybox { position: fixed; left: 0; top: 0; width: max-content; pointer-events: none; opacity: 0; transform-origin: 0 0; will-change: transform, opacity; }
-  #say .cl, #saybox .cl { width: max-content; max-width: 210px; padding: 12px 20px 13px; background: var(--paper); border: 2px solid var(--ink); border-radius: 30px 34px 32px 28px / 28px 32px 30px 34px; box-shadow: 3px 3px 0 var(--ink); font: 500 13px/1.25 'Geist Mono', var(--mono); letter-spacing: 0.02em; color: var(--ink); text-wrap: balance; opacity: 0; }
-  #say .d, #saybox .d { position: absolute; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); box-sizing: border-box; opacity: 0; }
-  #say .d1, #saybox .d1 { width: 7px; height: 7px; }
-  #say .d2, #saybox .d2 { width: 12px; height: 12px; }
-  #say .gl, #saybox .gl { color: var(--accent); display: inline-block; animation: jit 0.12s steps(1) infinite; }
-  @keyframes jit { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, 1px); } }
-
-  .home {
-    position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    height: 36px; display: flex; align-items: center; padding: 0 14px; border-radius: 999px;
-    background: var(--glass); border: 1px solid var(--line); color: var(--cream); text-decoration: none;
-    font: 500 11px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  }
-  .home:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-  .home .txt { margin-left: 8px; }
-  @media (max-width: 700px) { .home { width: 36px; padding: 0; justify-content: center; bottom: auto; top: calc(66px + env(safe-area-inset-top, 0px)); right: 18px; } .home .txt { display: none; } }   /* just the arrow, up top, so the hotbar has room */
-
-  /* bottom hotbar: seven slots (keys 1–7). The line above it says what the tool does or what a tap will do */
-  .hotbar {
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    display: flex; align-items: center; gap: 5px; padding: 7px; border-radius: 20px;
-    background: var(--glass); border: 1px solid var(--line);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  }
-  .slot {
-    --s: clamp(40px, 11.4vw, 58px);
-    position: relative; flex: none; width: var(--s); height: var(--s); padding: 0; border-radius: 14px;
-    border: 1px solid var(--line); background: rgba(240, 234, 220, 0.09); color: var(--cream);
-    cursor: pointer; display: grid; place-items: center; transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
-  }
-  .slot img, .slot svg { width: 80%; height: 80%; display: block; pointer-events: none; object-fit: contain; }
-  .slot svg { width: 56%; height: 56%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  .slot kbd { position: absolute; left: 5px; top: 3px; font: 500 10px/1 var(--mono); color: rgba(240, 234, 220, 0.55); pointer-events: none; }
-  .slot .count {
-    position: absolute; right: -4px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px;
-    background: var(--cream); color: var(--ink); font: 600 10px/18px var(--mono); font-variant-numeric: tabular-nums; text-align: center; pointer-events: none;
-  }
-  .slot .count.empty { background: var(--hp); color: var(--cream); }
-  .slot:active { transform: scale(0.92); }
-  .slot[aria-checked="true"] { border-color: var(--gold); background: rgba(214, 164, 70, 0.22); color: var(--gold); transform: translateY(-3px); }
-  .slot[aria-checked="true"] kbd { color: var(--gold); }
-  @media (max-width: 420px) { .slot kbd { display: none; } .hotbar { gap: 4px; padding: 6px; } }
-  #hint {
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px) + clamp(40px, 11.4vw, 58px) + 24px);
-    max-width: min(92vw, 560px); padding: 5px 12px; border-radius: 999px; background: rgba(21, 20, 18, 0.62);
-    font: 500 12px/1.3 var(--mono); color: var(--cream); text-align: center; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  #hint:empty { display: none; }
-  @media (max-width: 640px) { #hint { left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 20px); transform: none; white-space: normal; font-size: 11px; border-radius: 12px; } }   /* phones: two lines rather than a cut-off one */
-  /* the label beside the block or thing under the cursor (or just tapped): what a tap does there */
-  #tileTip {
-    position: fixed; left: 0; top: 0; padding: 4px 9px; border-radius: 8px; pointer-events: none; white-space: nowrap;
-    background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
-    font: 600 12px/1.2 var(--mono); will-change: transform; transition: opacity 0.15s ease;
-  }
-  #tileTip.no { background: #f3d9d2; }
-  #tileTip.walk { background: rgba(252, 251, 248, 0.82); font-weight: 500; }
-
-  /* panels: the stall, her bag, the goals, the bed and the morning summary (one at a time; the clock waits) */
-  #panel { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10, 9, 8, 0.45); padding: 16px; z-index: 5; }
-  #panel .card {
-    width: min(440px, 100%); max-height: calc(100% - 24px); overflow: auto; border-radius: 22px; padding: 16px 16px 18px;
-    background: rgba(28, 26, 23, 0.94); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-  }
-  #panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-  #panel h2 { margin: 0; font: 700 20px/1.2 var(--display); }
-  #panel button {
-    font: 600 12px/1 var(--mono); color: var(--cream); background: rgba(240, 234, 220, 0.1); border: 1px solid var(--line);
-    border-radius: 999px; padding: 9px 12px; cursor: pointer; white-space: nowrap;
-  }
-  #panel button:disabled { opacity: 0.35; cursor: default; }
-  #panel button:not(:disabled):hover { border-color: var(--gold); }
-  #panel button.go { background: var(--gold); color: var(--ink); border-color: var(--gold); padding: 11px 16px; font-size: 13px; }
-  #panel button.x { width: 34px; height: 34px; padding: 0; font-size: 18px; }
-  #panel .coins { margin: 0 0 10px; }
-  #panel .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-  #panel .tabs button.on { background: rgba(214, 164, 70, 0.25); border-color: var(--gold); color: var(--gold); }
-  #panel .list { display: grid; gap: 6px; }
-  #panel .row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 14px; background: rgba(240, 234, 220, 0.06); }
-  #panel .row .pic { width: 40px; height: 40px; flex: none; object-fit: contain; }
-  #panel .row .name { flex: 1; min-width: 0; font: 600 13px/1.25 var(--display); }
-  #panel .row small { display: block; font: 500 11px/1.3 var(--mono); color: rgba(240, 234, 220, 0.62); }
-  #panel .row .n { font: 600 13px/1 var(--mono); color: var(--gold); white-space: nowrap; }
-  #panel .row .have { font: 500 11px/1 var(--mono); color: rgba(240, 234, 220, 0.62); white-space: nowrap; }
-  #panel .row .done { font: 500 11px/1 var(--mono); color: var(--stam); }
-  #panel .list > button.go { margin-top: 6px; justify-self: stretch; }
-  #panel .empty, #panel .note { margin: 6px 2px; font: 500 12px/1.45 var(--mono); color: rgba(240, 234, 220, 0.72); }
-  #panel .summary { margin: 4px 0 10px; padding-left: 20px; display: grid; gap: 6px; font: 500 14px/1.4 var(--display); }
-  #panel .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-  #panel .goals { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-  #panel .goals li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(240, 234, 220, 0.05); font: 500 13px/1.3 var(--display); color: rgba(240, 234, 220, 0.75); }
-  #panel .goals li.next { background: rgba(214, 164, 70, 0.16); color: var(--cream); }
-  #panel .goals li.done { color: rgba(240, 234, 220, 0.45); }
-  #panel .goals .tick { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--stam); font-size: 13px; }
-  #panel .goals .name { flex: 1; }
-  #panel .goals small { font: 500 11px/1 var(--mono); color: var(--gold); white-space: nowrap; }
-
-  /* the night between two days: the screen goes dark while she sleeps */
-  #fade { position: fixed; inset: 0; background: #0b0a09; opacity: 0; pointer-events: none; transition: opacity 0.9s ease; z-index: 4; }
-  #fade.on { opacity: 1; pointer-events: auto; }
-  /* toasts: goals reached, money made */
-  #toasts { position: fixed; top: calc(70px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; pointer-events: none; z-index: 6; }
-  .toast { padding: 8px 14px; border-radius: 999px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); font: 600 13px/1.25 var(--mono); animation: toast 3.2s ease forwards; max-width: 86vw; text-align: center; }
-  .toast.goal { background: var(--gold); }
-  @keyframes toast { from { opacity: 0; translate: 0 -10px; } 8% { opacity: 1; translate: 0 0; } 85% { opacity: 1; } to { opacity: 0; } }
-  @media (max-width: 640px) { #toasts { top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); } }
-
-  /* the black box talks in ink: its cloud is the negative of hers */
-  #saybox .cl { background: var(--ink); color: var(--cream); border-color: var(--cream); box-shadow: 3px 3px 0 rgba(0,0,0,0.6); }
-  #saybox .d { background: var(--ink); border-color: var(--cream); box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
-
-  @media (prefers-reduced-motion: reduce) {
-    #loading .box, #loading .bar.wait i, #say .gl, #saybox .gl { animation: none; }
-  }
-</style>
-
-<div id="stage" data-word-aria="stage"></div>
-<div class="vignette"></div>
-<div id="fx"></div>
-
-<div id="saybox" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
-<div id="say" aria-hidden="true"><div class="cl"><span class="tx"></span></div><span class="d d1"></span><span class="d d2"></span></div>
-
-<div class="clock" id="clock" role="timer" data-word-aria="clock">
-  <svg viewBox="0 0 40 40" aria-hidden="true">
-    <circle cx="20" cy="20" r="15" fill="none" stroke="#3a3129" stroke-width="4"/>
-    <circle cx="20" cy="20" r="15" fill="none" stroke="#D6A446" stroke-width="4" stroke-dasharray="54.98 94.25" transform="rotate(180 20 20)"/>
-    <g id="dialHand" transform="rotate(0 20 20)">
-      <line x1="20" y1="20" x2="20" y2="8.5" stroke="#F0EADC" stroke-width="2" stroke-linecap="round"/>
-      <circle id="dialSun" cx="20" cy="5" r="3.4" fill="#D6A446" stroke="#1A1814" stroke-width="1.2"/>
-    </g>
-    <circle cx="20" cy="20" r="2.2" fill="#F0EADC"/>
-  </svg>
-  <div class="tx"><b id="clockTime">06:00</b><span id="clockDay"></span></div>
+<!-- the yaga.sh family bar: the same strip as on the other yaga.sh sites; homepage only (the game has its own link back), scrolls away -->
+<div class="yaga-bar">
+  <a class="yaga-bar-link" href="https://www.yaga.sh">
+    <svg class="yaga-bar-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4L6 8l4 4"/></svg>
+    <img class="yaga-bar-mark" src="site/yaga-mark.webp" width="16" height="16" alt="">
+    <span>Back to <strong>yaga.sh</strong></span>
+  </a>
 </div>
 
-<button class="round" id="sound" data-word-aria="soundOff">
-  <svg id="iconSoundOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
-  <svg id="iconSoundOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
-</button>
-
-<div class="side">
-  <div class="head">
-    <img class="portrait" src="assets/images/yaga-face.png" data-word-alt="portrait" width="256" height="256">
-    <div class="status">
-      <div class="coins" id="coins" role="status" data-word-aria="coins"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#D6A446" stroke="#1A1814" stroke-width="1.6"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="#8a6420" stroke-width="1.6"/></svg><b id="coinsN">0</b></div>
-      <div class="vital stam" id="vitalStamina" role="meter" data-word-aria="stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2.5 5.5 13.5H11l-1 8 8-11.5h-5.5Z"/></svg><span class="bar"><i></i></span></div>
-      <div class="vital mana" id="vitalMana" role="meter" data-word-aria="mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.6 4.3 6 7.1 6 10.4a6 6 0 0 1-12 0C6 10.1 8.4 7.3 12 3Z"/></svg><span class="bar"><i></i></span></div>
+<main>
+  <section class="hero">
+    <picture>
+      <source media="(min-width: 800px)" srcset="site/hero-wide.webp" width="1920" height="1200">
+      <img class="shot" src="site/hero-tall.webp" width="780" height="1688" alt="Night on the farm in the game: Yaga swings her broom at a red pest beside her field, under a glowing tree, with her hut on chicken legs behind her.">
+    </picture>
+    <div class="pitch">
+      <div class="who">
+        <img src="site/yaga.webp" width="88" height="88" alt="">
+        <p class="cloud">the legs were cheaper than stairs.</p>
+      </div>
+      <h1>Yaga</h1>
+      <p class="hook">Three hundred years of magic, and the pumpkins still want watering.</p>
+      <p class="intro">Yaga is a witch whose hut stands on chicken legs. She digs, plants, waters and harvests, sells at her market stall and keeps a few hens. When night falls the pests come for her crops, and she goes after them with her broom.</p>
+      <div class="go">
+        <a class="start" id="start" href="play/">Start</a>
+        <a class="more" href="#day">How a day goes</a>
+      </div>
     </div>
-  </div>
-  <div class="pills">
-    <button class="pill" id="bagPill" data-word-aria="bag.open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h15l-1.6 10a1.5 1.5 0 0 1-1.5 1.3H7.6a1.5 1.5 0 0 1-1.5-1.3Z"/><path d="M8.5 9.5 11 3.8M15.5 9.5 13 3.8"/></svg><span id="bagN">0</span></button>
-    <button class="pill" id="goalPill" data-word-aria="goal.open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4.5h11l-2.5 4 2.5 4H6"/></svg><span id="goalText"></span></button>
-  </div>
-</div>
+  </section>
 
-<div id="hint" aria-live="polite"></div>
-<div class="hotbar" id="hotbar" role="radiogroup" data-word-aria="hotbar">
-  <button class="slot" data-tool="hand" role="radio" aria-checked="true" data-word-aria="tool.hand"><kbd>1</kbd>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V5.5a1.5 1.5 0 0 1 3 0V12M17 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.7a6 6 0 0 1-4.6-2.2L4.4 15a1.6 1.6 0 0 1 2.4-2.1L8 14"/></svg></button>
-  <button class="slot" data-tool="shovel" role="radio" aria-checked="false" data-word-aria="tool.shovel"><kbd>2</kbd><img alt=""></button>
-  <button class="slot" data-tool="can" role="radio" aria-checked="false" data-word-aria="tool.can"><kbd>3</kbd><img alt=""><span class="count"></span></button>
-  <button class="slot" data-tool="seed:pumpkin" role="radio" aria-checked="false" data-word-aria="tool.seed:pumpkin"><kbd>4</kbd><img alt=""><span class="count"></span></button>
-  <button class="slot" data-tool="seed:cabbage" role="radio" aria-checked="false" data-word-aria="tool.seed:cabbage"><kbd>5</kbd><img alt=""><span class="count"></span></button>
-  <button class="slot" data-tool="broom" role="radio" aria-checked="false" data-word-aria="tool.broom"><kbd>6</kbd><img alt=""></button>
-  <button class="slot" data-tool="spell" role="radio" aria-checked="false" data-word-aria="tool.spell"><kbd>7</kbd>
-    <svg viewBox="0 0 24 24" aria-hidden="true" style="color:#8b9bf0"><path d="M12 2.5 13.8 9l6.7 1.5-6.7 1.6L12 18.5l-1.8-6.4-6.7-1.6L10.2 9Z" fill="currentColor" fill-opacity="0.35"/><path d="M18.5 16.5l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7Z"/></svg></button>
-</div>
-<div id="tileTip" hidden></div>
-<div id="toasts"></div>
-<div id="fade"></div>
-<div id="panel" hidden role="dialog" aria-modal="true"><div class="card"></div></div>
+  <div class="band" aria-hidden="true"></div>
 
-<a class="home" href="https://yaga.sh/" data-word-aria="home"><span class="arrow">←</span><span class="txt" data-word="homeText"></span></a>
+  <section id="day" class="day">
+    <h2>How a day goes</h2>
+    <ol class="beats">
+      <li>
+        <figure><img src="site/dig.webp" width="720" height="540" loading="lazy" alt="Yaga with a shovel at the edge of her field."><figcaption class="cloud">one more plot. my back says hi.</figcaption></figure>
+        <time>6:00</time>
+        <h3>Dig and plant</h3>
+        <p>The shovel turns plain ground into farmland. Cabbage is ripe in three days, pumpkin in four and worth the wait.</p>
+      </li>
+      <li>
+        <figure><img src="site/water.webp" width="720" height="540" loading="lazy" alt="Yaga with her watering can beside the crops, the well behind her."><figcaption class="cloud">one a day, or it sulks.</figcaption></figure>
+        <time>All day</time>
+        <h3>Water</h3>
+        <p>Each crop wants one drink a day. Only a watered crop grows overnight. The can runs dry, the well doesn't.</p>
+      </li>
+      <li>
+        <figure><img src="site/stall.webp" width="720" height="540" loading="lazy" alt="The market stall panel in the game: pumpkins, eggs and a ladybug for sale."><figcaption class="cloud">money for vegetables. what a world.</figcaption></figure>
+        <time>Until 20:00</time>
+        <h3>Harvest and sell</h3>
+        <p>Pull what is ripe, pick up the eggs, catch a bug or two. Coins from the stall buy seeds, more hens and a bigger can.</p>
+      </li>
+      <li>
+        <figure><img src="site/night.webp" width="720" height="540" loading="lazy" alt="Night: Yaga with her broom, a big red ant already in the crops."><figcaption class="cloud">not my vegetables. not today.</figcaption></figure>
+        <time>After dark</time>
+        <h3>Broom, then bed</h3>
+        <p>Red pests crawl in for crops that are dry or ripe. Swat them, then tap the hut to sleep. Morning tells you what the night did.</p>
+      </li>
+    </ol>
+  </section>
 
-<!-- the loading texts are written here, not in words/en.json: they show before the words have loaded -->
-<div id="loading" role="status" aria-label="Waking Yaga" data-word-aria="loading">
-  <div class="box"></div>
-  <div class="info" aria-hidden="true">
-    <p class="title">Waking Yaga</p>
-    <div class="bar wait"><i></i></div>
-    <p class="now">Loading the game code…</p>
-    <p class="row"><span class="size"></span><span class="pct"></span></p>
-    <p class="tally"></p>
-    <ol class="files"></ol>
-  </div>
-</div>
+  <section class="keys">
+    <div>
+      <h2>How to steer her</h2>
+      <p>One rule: if the tool in her hand can do something there, she does it. If not, she just walks there. She does nothing unless you tell her. The furry black box follows her anyway, and comments.</p>
+    </div>
+    <table>
+      <thead><tr><td></td><th scope="col">Phone or mouse</th><th scope="col">Keyboard</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Walk</th><td>Tap or click the ground</td><td><kbd>WASD</kbd> or <kbd>arrows</kbd></td></tr>
+        <tr><th scope="row">Use the tool</th><td>Tap or click the block</td><td><kbd>E</kbd> or <kbd>Space</kbd></td></tr>
+        <tr><th scope="row">Pick a tool</th><td>Tap the hotbar</td><td><kbd>1</kbd> to <kbd>7</kbd></td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
 
-<script type="module" src="./code/app.js"></script>
+<footer>
+  <p>Free to play. Your farm is kept in this browser, no account needed.</p>
+  <p>A game by <a href="https://yaga.sh">Yaga Labs</a></p>
+</footer>
 
-
-</body></html>
+<script>
+  // the game's save key is SAVE_KEY in play/code/app.js (and its older one, OLD_SAVE_KEY, which it brings over).
+  // pageshow, not load: coming back from the game can restore this page as it was left
+  addEventListener('pageshow', () => {
+    try { if (localStorage.getItem('yaga-farm-v2') || localStorage.getItem('yaga-pet-v1')) document.getElementById('start').textContent = 'Continue'; } catch (e) { /* no storage: it stays Start */ }
+  });
+</script>
+</body>
+</html>

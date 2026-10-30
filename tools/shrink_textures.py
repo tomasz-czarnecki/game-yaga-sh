@@ -1,11 +1,11 @@
 """Makes the textures inside a .glb smaller, so the game loads faster on a phone.
 
-    uv run --no-project --with pillow python tools/shrink_textures.py assets/models/yaga/yaga-dressed.glb [max px]
+    uv run --no-project --with pillow python tools/shrink_textures.py play/assets/models/yaga/yaga-dressed.glb [max px]
 
 Every image is shrunk to at most `max px` (default 1024) on its longest side and saved again in its own format
 (WebP and JPEG at quality 85, PNG lossless). Everything else in the file (meshes, skeleton, animations, materials)
 is copied unchanged, and that is checked before the file is written. Run it after exporting a new model from
-Blender, then update the model's rough size at its loadGLB(...) call in boot() (code/app.js).
+Blender, then update the model's rough size at its loadGLB(...) call in boot() (play/code/app.js).
 """
 import io
 import json

@@ -1,4 +1,4 @@
-"""Checks that every word the game asks for exists in words/en.json.
+"""Checks that every word the game asks for exists in play/words/en.json.
 
 Run from anywhere: uv run --no-project python tools/check_words.py
 Prints what is missing (errors) and what nothing seems to use (notes). Exits with 1 if there are errors.
@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent / "play"      # the game; this file lives in tools/, beside it
 code = "\n".join(f.read_text() for f in sorted((ROOT / "code").glob("*.js")))   # every module, not code/lib
 app = (ROOT / "code" / "app.js").read_text()
 page = (ROOT / "index.html").read_text()
@@ -18,9 +18,9 @@ errors, notes = [], []
 try:
     words = json.loads((ROOT / "words" / "en.json").read_text())
 except json.JSONDecodeError as e:
-    sys.exit(f"words/en.json is not valid JSON: {e}")
+    sys.exit(f"play/words/en.json is not valid JSON: {e}")
 
-for section in ("lang", "yaga", "house", "defendBox", "box", "arguments", "pokeEnd", "gibberish", "bugs", "ui"):
+for section in ("lang", "yaga", "defendBox", "box", "arguments", "pokeEnd", "gibberish", "bugs", "ui"):
     if section not in words:
         errors.append(f"section missing: {section}")
 if errors:
@@ -33,7 +33,7 @@ for name, table in (("yaga", yaga), ("box", box)):
     for key, lines in table.items():
         if not isinstance(lines, list) or not lines or not all(isinstance(s, str) and s for s in lines):
             errors.append(f"{name}.{key} must be a list of non-empty lines")
-for name in ("house", "defendBox", "pokeEnd"):
+for name in ("defendBox", "pokeEnd"):
     if not words[name]:
         errors.append(f"{name} must not be empty")
 if len(words["pokeEnd"]) < 2:
@@ -76,11 +76,11 @@ def has(path):
 
 for path in sorted(set(re.findall(r"\bUI\.(\w+(?:\.\w+)*)", code))):
     if not has(path):
-        errors.append(f"ui.{path} missing (used in code/)")
+        errors.append(f"ui.{path} missing (used in play/code/)")
 for attr in ("data-word", "data-word-aria", "data-word-alt"):
     for path in sorted(set(re.findall(rf'{attr}="([\w.:]+)"', page))):
         if not has(path):
-            errors.append(f"ui.{path} missing (used by {attr} in index.html)")
+            errors.append(f"ui.{path} missing (used by {attr} in play/index.html)")
 
 # tables the code looks up by a key it works out: each needs every key
 def need(table, keys, what):
@@ -93,7 +93,7 @@ need("no", no_say.keys(), "a reason in NO_SAY")
 acts = re.findall(r"^  (\w+): \{ clip", (ROOT / "code" / "farm.js").read_text(), re.M) + ["walk", "swat", "shop", "bed", "nothing"]
 need("act", acts, "an action")
 goals = re.findall(r"\{ id: '(\w+)'", (ROOT / "code" / "goals.js").read_text())
-need("goals", goals, "a goal in code/goals.js")
+need("goals", goals, "a goal in play/code/goals.js")
 crops = re.findall(r"^    (\w+): \{ days", (ROOT / "settings.js").read_text(), re.M)
 need("items", crops + [f"seed:{c}" for c in crops] + ["egg", "feed", "hen", "bigCan", "steelShovel"], "an item")
 for key in ("growing",):
@@ -105,9 +105,8 @@ for key, pair in ui.get("summary", {}).items():
 
 for bug in bug_ids:
     entry = words["bugs"].get(bug, {})
-    for field in ("name", "a", "plural"):
-        if not entry.get(field):
-            errors.append(f"bugs.{bug}.{field} missing")
+    if not entry.get("name"):
+        errors.append(f"bugs.{bug}.name missing")
 
 # placeholders must be ones the code fills in
 fills = {"n", "bug", "crop"}
@@ -148,5 +147,5 @@ for n in notes:
     print("note:", n)
 for e in errors:
     print("ERROR:", e)
-print("OK: every word the game asks for is in words/en.json" if not errors else f"{len(errors)} problem(s) found")
+print("OK: every word the game asks for is in play/words/en.json" if not errors else f"{len(errors)} problem(s) found")
 sys.exit(1 if errors else 0)

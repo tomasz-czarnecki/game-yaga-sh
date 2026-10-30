@@ -33,10 +33,10 @@ const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI)
 const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 
 /* ───────────── words: everything said or labelled in the game lives in words/en.json ───────────── */
-let LINES, HOUSE_LINES, BOX_LINES, DEFEND, ARGUMENTS, POKE_END, GLY, WORDS, TOKS, BUG, UI;
+let LINES, BOX_LINES, DEFEND, ARGUMENTS, POKE_END, GLY, WORDS, TOKS, BUG, UI;
 /** Takes the loaded words file into use. Boot calls this before anything is said. */
 function useWords(w) {
-  ({ yaga: LINES, house: HOUSE_LINES, box: BOX_LINES, defendBox: DEFEND, arguments: ARGUMENTS, pokeEnd: POKE_END, bugs: BUG, ui: UI } = w);
+  ({ yaga: LINES, box: BOX_LINES, defendBox: DEFEND, arguments: ARGUMENTS, pokeEnd: POKE_END, bugs: BUG, ui: UI } = w);
   ({ glyphs: GLY, words: WORDS, tokens: TOKS } = w.gibberish);
   document.documentElement.lang = w.lang;
 }
@@ -158,14 +158,10 @@ class YagaPet {
     const s = this.squash.scale.x;
     this.proxy = new THREE.Mesh(new THREE.BoxGeometry(0.9 / s, 2.25, 0.8 / s), new THREE.MeshBasicMaterial({ visible: false }));
     this.proxy.position.y = 1.12; this.creature.add(this.proxy);
-    this.mouthPoint = new THREE.Object3D(); this.mouthPoint.position.set(0, 2.2 * 0.8, 0.18 / s); this.creature.add(this.mouthPoint);
 
     this.heading = 0.3; this.faceTo = null; this.turnRate = 7;
-    this.hop = null; this.vel = new THREE.Vector3(); this.prev = new THREE.Vector3();
-    this.st = { puffV: 0 };                         // a poke nudges this spring; she shrugs it off
-    this.pokeAt = -9; this.startleAt = -9; this.near = 0; this.hover = null;
-    this.touch = { on: false, local: new THREE.Vector3(), vel: new THREE.Vector3() };
-    this.inv = new THREE.Quaternion();
+    this.hop = null;
+    this.touch = { on: false };
     this.setClip('idle');
   }
 
@@ -227,7 +223,6 @@ class YagaPet {
 
   update(dt, t, camera) {
     const pos = this.root.position;
-    this.prev.copy(pos);
     const h = this.hop;
     if (h) {
       h.t += dt;
@@ -236,7 +231,6 @@ class YagaPet {
       if (k >= 1) { this.hop = null; this.lastWalk = t; }
     }
     pos.y = ease(pos.y, groundY(pos.x, pos.z), 14, dt);   // a block edge reads as a quick step up or down
-    this.vel.subVectors(pos, this.prev).divideScalar(Math.max(dt, 1e-3));
 
     if (this.faceTo != null) this.heading += wrap(this.faceTo - this.heading) * (1 - Math.exp(-this.turnRate * 1.6 * dt));
     this.root.rotation.y = this.heading;
@@ -248,7 +242,6 @@ class YagaPet {
     this.mixer.update(dt);
 
     this.root.updateMatrixWorld(true);
-    this.inv.copy(this.creature.getWorldQuaternion(new THREE.Quaternion())).invert();
   }
 }
 
@@ -553,16 +546,15 @@ class BlackBox {
     { const ctrl = []; for (let i = 0; i <= 8; i++) { const x = -0.44 + i * 0.11; ctrl.push([x, -0.045 + 0.09 * (x / 0.44) ** 2]); }
       const d = mkPoly(ctrl, 0.03); addMouth('smile', [0, -0.38], d.g, 1, d.pts, d.hw); }
     { const d = mkPoly([[-0.48, 0.0], [-0.30, -0.08], [-0.12, 0.005], [0.07, -0.1], [0.26, 0.012], [0.43, 0.1]], 0.032); addMouth('grumpy', [0, -0.38], d.g, 1, d.pts, d.hw); }
-    this.mouthPoint = new THREE.Object3D(); this.mouthPoint.position.set(0, -0.4, 1.05); cr.add(this.mouthPoint);
 
     // live state
     this.heading = 0.3; this.faceTo = null; this.turnRate = 7;
     this.hop = null; this.vel = new THREE.Vector3(); this.prev = new THREE.Vector3();
-    this.st = { puff: 0, puffV: 0, land: 0, landV: 0, lean: 0, stretch: 0, squat: 0, up: 0.36, lo: -0.5, blinkAt: -9, nextBlink: 2,
-      flap: 0, tilt: 0, wind: new THREE.Vector2(), windV: new THREE.Vector2(), shake: 0, breath: 0, eyeScale: 0.86 };
-    // inputs the brain writes every frame
-    this.want = { up: 0.36, lo: -0.5, flap: 0, face: 'smile', droop: 0.35, puff: 0, look: null, asleep: false, squat: 0, stretch: 0, shake: 0 };
-    this.pokeAt = -9; this.startleAt = -9; this.near = 0; this.hover = null;
+    this.st = { puff: 0, puffV: 0, land: 0, landV: 0, lean: 0, up: 0.36, lo: -0.5, blinkAt: -9, nextBlink: 2,
+      flap: 0, tilt: 0, wind: new THREE.Vector2(), windV: new THREE.Vector2(), shake: 0, eyeScale: 0.86 };
+    // inputs tickBox() writes every frame
+    this.want = { up: 0.36, lo: -0.5, flap: 0, face: 'smile', droop: 0.35, puff: 0, look: null, shake: 0 };
+    this.pokeAt = -9; this.startleAt = -9;
     this.ex = { want: 'smile', cur: 'smile', amt: 1, v: 0 }; this.applyMouth('smile');
     this.touch = { on: false, local: new THREE.Vector3(), vel: new THREE.Vector3() };
     this.tmp = new THREE.Vector3(); this.inv = new THREE.Quaternion(); this.eyeW = new THREE.Vector3();
@@ -584,7 +576,7 @@ class BlackBox {
     const from = this.root.position.clone(); from.y = groundY(from.x, from.z);
     const dist = Math.hypot(x - from.x, z - from.z);
     this.hop = { from, to: new THREE.Vector3(x, groundY(x, z), z), t: 0, ant: o.ant ?? 0.16, dur: 0.36 + dist * 0.085,
-      h: (o.h ?? 0.45) + dist * 0.1, launched: false, big: !!o.big };
+      h: (o.h ?? 0.45) + dist * 0.1, big: !!o.big };
     if (dist > 0.05) this.faceTo = Math.atan2(x - from.x, z - from.z);
   }
 
@@ -609,7 +601,6 @@ class BlackBox {
       h.t += dt;
       if (h.t < h.ant) { hopSq = -0.2 * Math.sin(h.t / h.ant * Math.PI); }
       else if (h.t < h.ant + h.dur) {
-        if (!h.launched) { h.launched = true; this.onLaunch && this.onLaunch(h); }
         const u = airU = (h.t - h.ant) / h.dur;
         const k = 0.7 * u + 0.3 * u * u * (3 - 2 * u);
         pos.x = lerp(h.from.x, h.to.x, k); pos.z = lerp(h.from.z, h.to.z, k);
@@ -619,7 +610,6 @@ class BlackBox {
         pos.copy(h.to);
         this.hop = null;
         st.landV = h.big ? -4.2 : -3.2; st.puffV += h.big ? 5 : 3.2;
-        this.onLand && this.onLand(h);
       }
     }
     st.landV += (-st.land * 150 - st.landV * 10) * dt;
@@ -632,16 +622,13 @@ class BlackBox {
     st.shake = ease(st.shake, w.shake, 12, dt);
     this.root.rotation.y = this.heading + Math.sin(t * 24) * 0.32 * st.shake;
 
-    // ── puff (spring), breathing, squat and stretch ──
+    // ── puff (spring) and breathing ──
     st.puffV += (-(st.puff - w.puff) * 55 - st.puffV * 6.5) * dt; st.puff += st.puffV * dt;
     if (!Number.isFinite(st.puff)) { st.puff = 0; st.puffV = 0; }
-    st.squat = ease(st.squat, w.squat, 10, dt);
-    st.stretch = ease(st.stretch, w.stretch, 8, dt);
-    const brRate = w.asleep ? 0.9 : 1.35, brAmp = w.asleep ? 0.03 : 0.012;
-    const br = Math.sin(t * brRate) * brAmp;
-    const q = hopSq + st.land + st.squat;
-    let sx = (1 - br * 0.5 + st.puff * 0.03) * (1 - q * 0.55) * (1 - st.stretch * 0.3);
-    let sy = (1 + br + st.puff * 0.035) * (1 + q) * (1 + st.stretch);
+    const br = Math.sin(t * 1.35) * 0.012;
+    const q = hopSq + st.land;
+    let sx = (1 - br * 0.5 + st.puff * 0.03) * (1 - q * 0.55);
+    let sy = (1 + br + st.puff * 0.035) * (1 + q);
     const pk = (t - this.pokeAt) / 0.25;    // poke: squash then stretch, ~250ms
     if (pk >= 0 && pk < 1) { const qq = Math.sin(pk * Math.PI * 2) * (1 - pk) * 0.24; sy *= 1 - qq; sx *= 1 + qq * 0.55; }
     this.squash.scale.set(this.scale * sx, this.scale * sy, this.scale * sx);
@@ -667,17 +654,16 @@ class BlackBox {
     U.uTouchVel.value.lerp(this.touch.vel, 1 - Math.exp(-8 * dt));
 
     // ── eyes: look, lids, brow tilt, blink ──
-    const target = w.look || this.hover || camera.position;
+    const target = w.look || camera.position;
     const F = FACES[w.face] || FACES.smile, since = t - this.startleAt, startled = since >= 0 && since < 0.75;
     const pop = startled ? 1 + 0.12 * Math.sin(since / 0.75 * Math.PI) : 1;
-    st.up = ease(st.up, w.up + (w.asleep ? 0 : this.near * 0.25), 12, dt); st.lo = ease(st.lo, w.lo, 12, dt);
-    st.tilt = ease(st.tilt, w.asleep ? 0 : startled ? F.tilt * 0.3 : F.tilt, 10, dt);
-    st.eyeScale = ease(st.eyeScale, F.es * (1 + this.near * 0.05 + (startled ? 0.07 : 0)), 10, dt);
+    st.up = ease(st.up, w.up, 12, dt); st.lo = ease(st.lo, w.lo, 12, dt);
+    st.tilt = ease(st.tilt, startled ? F.tilt * 0.3 : F.tilt, 10, dt);
+    st.eyeScale = ease(st.eyeScale, F.es * (1 + (startled ? 0.07 : 0)), 10, dt);
     U.uEyeRad.value = this.eyeR * st.eyeScale;
     if (t > st.nextBlink) { st.blinkAt = t; st.nextBlink = Math.random() < 0.18 ? t + 0.32 : t + rand(2.6, 6.5); }
     const tb = (t - st.blinkAt) / 0.18;
     let b = tb >= 0 && tb < 1 ? (tb < 0.4 ? tb / 0.4 : 1 - (tb - 0.4) / 0.6) : 0; b = b * b * (3 - 2 * b);
-    if (w.asleep) b = 1;
     for (const eye of this.eyes) {
       eye.socket.getWorldPosition(this.eyeW);
       this.tmp.subVectors(target, this.eyeW).applyQuaternion(this.inv);
@@ -734,27 +720,21 @@ const Sound = {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(this.out); s.start(t); s.stop(t + dur + 0.02);
   },
-  hop() { this.tone(260, 520, 0.14, 0.07, 'sine'); },
-  land() { this.tone(140, 60, 0.12, 0.08, 'sine'); this.noise(0.06, 0.02, 400, 0.8); },
-  chomp(d = 0) { this.noise(0.07, 0.16, 900, 1.4, d); this.tone(180, 110, 0.06, 0.06, 'triangle', d); },
   squeak() { this.tone(620, 1250, 0.12, 0.12, 'sine'); this.tone(1250, 900, 0.08, 0.07, 'sine', 0.11); },
   grumble() { this.tone(210, 150, 0.16, 0.1, 'triangle'); this.tone(190, 130, 0.2, 0.1, 'triangle', 0.18); },
   chime() { [784, 988, 1319].forEach((f, i) => this.tone(f, f, 0.34, 0.07, 'sine', i * 0.08)); },
   yum() { this.tone(520, 700, 0.12, 0.08, 'sine'); this.tone(700, 1050, 0.16, 0.08, 'sine', 0.12); },
   poof() { this.noise(0.32, 0.12, 2400, 0.7, 0, 500); [1568, 2093].forEach((f, i) => this.tone(f, f, 0.2, 0.04, 'sine', 0.06 + i * 0.07)); },
   plop() { this.tone(300, 90, 0.18, 0.13, 'sine'); this.noise(0.08, 0.05, 300, 1); },
-  drop() { this.tone(900, 320, 0.2, 0.06, 'sine'); },
   thud() { this.tone(200, 90, 0.08, 0.08, 'triangle'); },
   purr() { this.noise(0.28, 0.05, 140, 3); this.tone(70, 60, 0.28, 0.05, 'sawtooth'); },
   snore() { this.noise(1.2, 0.035, 220, 2.5, 0, 160); },
-  yawn() { this.tone(330, 190, 0.7, 0.06, 'triangle'); },
   wake() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.26, 0.06, 'sine', i * 0.07)); },
   night() { [659, 523, 392].forEach((f, i) => this.tone(f, f, 0.4, 0.05, 'sine', i * 0.12)); },
   babble() { const f = rand(330, 640); this.tone(f, f * rand(0.8, 1.3), 0.06, 0.035, 'triangle'); },
   equip() { this.tone(520, 760, 0.06, 0.06, 'square'); this.noise(0.05, 0.05, 2400, 2); },
   swing() { this.noise(0.2, 0.1, 1300, 1, 0, 1800); },
   cluck() { const f = rand(380, 520); this.tone(f, f * 1.25, 0.05, 0.08, 'square'); this.tone(f * 0.9, f * 1.1, 0.05, 0.07, 'square', 0.09); },
-  squawk() { this.tone(900, 500, 0.22, 0.1, 'sawtooth'); this.noise(0.12, 0.06, 2200, 1); },
   hit() { this.tone(190, 60, 0.12, 0.16, 'square'); this.noise(0.06, 0.1, 900, 1); },
   coin() { [1319, 1760].forEach((f, i) => this.tone(f, f, 0.12, 0.06, 'triangle', i * 0.07)); },
   pour() { this.noise(0.5, 0.07, 1400, 0.7, 0, 500); },
@@ -987,19 +967,16 @@ function shrinkTree(env) {
   return pivot;
 }
 
-/** Copies of the tree and the rock pair across the field; each one is an obstacle and a place to wander to. */
+/** Copies of the tree and the rock pair across the field; each one is an obstacle. */
 function buildScenery(env, tree) {
-  world.landmarks = [{ x: TREE.x, z: TREE.z }, { x: 5.0, z: -2.0 }];
   for (const [x, z, k] of SCENERY.trees) {
     const t = tree.clone(); t.position.set(x, groundY(x, z), z); t.scale.setScalar(TREE_SCALE * k); t.rotation.y = rand(0, Math.PI * 2); scene.add(t);
     OBSTACLES.push({ x, z, r: 0.55 * TREE_SCALE * k + BODY_R });
-    world.landmarks.push({ x, z });
   }
   // the rock pair sits at (4.65, -2.15) and (5.45, -1.85) in the original clearing
   for (const [x, z] of SCENERY.rocks) {
     const r = env.clone(); r.position.set(env.position.x + x - 4.65, groundY(x, z), env.position.z + z + 2.15); scene.add(r);
     OBSTACLES.push({ x, z, r: 1.0 + BODY_R }, { x: x + 0.8, z: z + 0.3, r: 0.8 + BODY_R });
-    world.landmarks.push({ x, z });
   }
 }
 
@@ -1174,7 +1151,6 @@ function buildHouse(look) {
 
   const glow = new THREE.PointLight(C.windowGlow, 0, 9, 1.8); glow.position.set(0, 3.0, 2.2); root.add(glow);
   OBSTACLES.push({ x: HOUSE.x, z: HOUSE.z, r: 1.9 * look.size + BODY_R });
-  world.landmarks.push({ x: HOUSE_DOOR.x, z: HOUSE_DOOR.z });
   world.house = { root, body, legs, windows, glass: M.glass, glow, smoke, stompAt: -9, wallTop };
 }
 
@@ -1517,7 +1493,7 @@ function tickHen(h, dt) {
   if (!blocked(nx, nz, 0.15)) { p.x = nx; p.z = nz; }
   else { h.v = 0; h.goal = henGoal(); h.rest = 0.5; }     // walked into something: think again
   p.y = ease(p.y, groundY(p.x, p.z), 12, dt); h.root.rotation.y = h.heading;
-  h.model.tick(h.t, h.v / SET.hens.speed, peck, false);
+  h.model.tick(h.t, h.v / SET.hens.speed, peck);
 }
 function tickHens(dt) { for (const h of world.hens) tickHen(h, dt); }
 /** Draws an egg lying in the yard; `e` is its saved {x, z}. */
@@ -1697,7 +1673,7 @@ function tickProps(dt) {
 const clock = { t: 0 };
 const QUEUE_MAX = 12;
 const her = { mode: 'idle', goal: new THREE.Vector3(), run: false, hops: 0, pause: 0, order: null, queue: [], job: null,
-  restUntil: 0, sleepT: 0, passedOut: false, slept: false, contentUntil: 0, pokes: [], lastPoke: -99, snoreAt: 0 };
+  restUntil: 0, sleepT: 0, passedOut: false, slept: false, contentUntil: 0, pokes: [], snoreAt: 0 };
 const timers = [];
 /** Runs fn after `secs` of game time (clock.t, so advance() steps it too). */
 function later(secs, fn) { timers.push({ at: clock.t + secs, fn }); }
@@ -2297,7 +2273,7 @@ function tickBox(dt) {
 
   const face = t < Box.faceUntil ? Box.face : 'smile', F = FACES[face];
   Box.look.set(y.x, y.y + YAGA_H * 0.85, y.z);
-  Object.assign(w, { face, up: F.up, lo: F.lo, flap: boxFlap(t), look: Box.look, droop: 0.35, puff: face === 'grin' ? 0.15 : 0, squat: 0, shake: t < Box.shakeUntil ? 1 : 0 });
+  Object.assign(w, { face, up: F.up, lo: F.lo, flap: boxFlap(t), look: Box.look, droop: 0.35, puff: face === 'grin' ? 0.15 : 0, shake: t < Box.shakeUntil ? 1 : 0 });
 }
 
 function tickBoxTalk(t) {
@@ -2309,10 +2285,8 @@ function tickBoxTalk(t) {
 /* ───────────── poking and stroking her (just for fun: it never gives her orders) ───────────── */
 function poke() {
   const t = clock.t;
-  pet.pokeAt = t; her.lastPoke = t;
   her.pokes = her.pokes.filter((p) => t - p < 5); her.pokes.push(t);
   if (her.mode === 'rest' || her.mode === 'sleep' || her.mode === 'faint') { Sound.grumble(); say('sleep_poke', { force: true, cool: 2.5 }); return; }
-  pet.startleAt = t; pet.st.puffV += 9;
   Sound.squeak();
   if (her.mode === 'idle' && !pet.airborne) {
     pet.faceTo = faceCamAngle();
@@ -2329,22 +2303,19 @@ function happyHop(big = false) {
 }
 
 /* ───────────── input ───────────── */
-const ptr = { down: false, id: null, x0: 0, y0: 0, t0: 0, onPet: false, moved: 0, groundAt: -1e9, groundX: 0, groundY: 0, last: new THREE.Vector2(), lastT: 0, heartAt: 0, purrAt: 0, hx: 0, hy: 0, hoverAt: -99, nearT: 0, planAt: 0, hoverPlan: null };
-const hoverV = new THREE.Vector3();
-// desktop: her eyes follow the cursor; and what a click would do under it, worked out ten times a second
+const ptr = { down: false, id: null, t0: 0, onPet: false, moved: 0, groundAt: -1e9, groundX: 0, groundY: 0, last: new THREE.Vector2(), heartAt: 0, purrAt: 0, hx: 0, hy: 0, hoverAt: -99, nearT: 0, planAt: 0, hoverPlan: null };
+// desktop: what a click would do under the cursor, worked out ten times a second; linger near her and she says so
 function tickHover(dt) {
-  let near = 0; pet.hover = null;
+  let near = 0;
   const hovering = !MOBILE && !ptr.down && clock.t - ptr.hoverAt < 3;
   if (hovering) {
     toNdc({ clientX: ptr.hx, clientY: ptr.hy });
     const c = pet.pos.clone(); c.y += 1.07 * pet.squash.scale.y;
     const d = camera.position.distanceTo(c);
-    pet.hover = hoverV.copy(ray.ray.direction).multiplyScalar(d * 0.8).add(ray.ray.origin);
     const sc = screenOf(c), H = stage.clientHeight || innerHeight;
     const r = (BODY_R / (d * Math.tan((camera.fov * Math.PI) / 360))) * H / 2;
     near = 1 - smooth(r * 0.9, r * 2.2, Math.hypot(ptr.hx - sc.x, ptr.hy - sc.y));
   }
-  pet.near = ease(pet.near, near, 5, dt);
   ptr.nearT = near > 0.85 ? ptr.nearT + dt : 0;
   if (ptr.nearT > 2.2 && her.mode !== 'sleep') { ptr.nearT = 0; say('hover', { cool: 45 }); }
   if (!hovering || panelOpen() || her.mode === 'sleep') { ptr.hoverPlan = null; return; }
@@ -2383,13 +2354,12 @@ function pickTarget() {
 function onDown(e) {
   Sound.init(); noteInput();
   toNdc(e);
-  Object.assign(ptr, { down: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: 0, onPet: false });
-  ptr.last.set(e.clientX, e.clientY); ptr.lastT = performance.now();
+  Object.assign(ptr, { down: true, id: e.pointerId, t0: performance.now(), moved: 0, onPet: false });
+  ptr.last.set(e.clientX, e.clientY);
   // she (or the Box) often stands in front of the block a tap means: the tool's work there comes first, a poke second
   const o = planFor(pickTarget()), work = o && o.act !== 'walk';
   if (!work && hitBoxPet()) return pokeBox();
-  const hp = !work && hitPet();
-  if (hp) { ptr.onPet = true; renderer.domElement.setPointerCapture?.(e.pointerId); touchAt(hp, 0, 0); return; }
+  if (!work && hitPet()) { ptr.onPet = true; renderer.domElement.setPointerCapture?.(e.pointerId); pet.touch.on = true; return; }
   if (!o) return;
   let run = false;
   if (o.act === 'walk') {                          // a second tap on the ground, quick and close: run
@@ -2404,23 +2374,15 @@ function onDown(e) {
     if (!run && Math.hypot(o.x - pet.pos.x, o.z - pet.pos.z) > 3 && Math.random() < 0.3) say('summon', { cool: 12 });
   } else flashTip(o, 1.0);
 }
-function touchAt(hit, vx, vy) {
-  pet.creature.worldToLocal(pet.touch.local.copy(hit.point));
-  pet.touch.on = true;
-  pet.touch.vel.set(vx * 0.004, -vy * 0.004, 0).applyQuaternion(pet.inv);
-  if (pet.touch.vel.length() > 1.4) pet.touch.vel.setLength(1.4);
-}
 function onMove(e) {
   ptr.hx = e.clientX; ptr.hy = e.clientY; ptr.hoverAt = clock.t;
   if (!ptr.down || e.pointerId !== ptr.id || !ptr.onPet) return;
   toNdc(e);
-  const now = performance.now(), dtp = Math.max(1, now - ptr.lastT);
-  const vx = (e.clientX - ptr.last.x) / dtp * 16, vy = (e.clientY - ptr.last.y) / dtp * 16;
+  const now = performance.now();
   ptr.moved += Math.hypot(e.clientX - ptr.last.x, e.clientY - ptr.last.y);
-  ptr.last.set(e.clientX, e.clientY); ptr.lastT = now;
-  const hp = hitPet();
-  if (!hp) { pet.touch.on = false; return; }
-  touchAt(hp, vx, vy);
+  ptr.last.set(e.clientX, e.clientY);
+  pet.touch.on = !!hitPet();
+  if (!pet.touch.on) return;
   if (ptr.moved > 14) {                    // stroking her hair
     her.contentUntil = clock.t + 0.7;
     if (now - ptr.heartAt > 380) { ptr.heartAt = now; heart(e.clientX, e.clientY); }

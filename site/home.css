@@ -1,0 +1,135 @@
+/* The homepage. Same colours and fonts as the game (the :root at the top of play/index.html). Phone first. */
+:root {
+  --void: #151412;
+  --soot: #1F1C18;
+  --cream: #F0EADC;
+  --dim: rgba(240, 234, 220, 0.72);
+  --gold: #D6A446;
+  --accent: #CF6E42;
+  --red: #C8442F;
+  --moss: #86A24A;
+  --ink: #1A1814;
+  --paper: #FCFBF8;
+  --line: rgba(240, 234, 220, 0.18);
+  --display: 'Geist', system-ui, -apple-system, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --yb: 29px;
+  --gut: 20px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--void); color: var(--cream); font: 400 16px/1.5 var(--display); }
+img { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+h1, h2, h3, p, ol, figure { margin: 0; padding: 0; }
+ol { list-style: none; }
+
+/* her speech cloud, as in the game: paper, ink, a hard shadow */
+.cloud {
+  width: fit-content; padding: 9px 15px 10px; background: var(--paper); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 22px 26px 24px 20px / 20px 24px 22px 26px; box-shadow: 3px 3px 0 var(--ink);
+  font: 500 13px/1.25 var(--mono); letter-spacing: 0.01em;
+}
+
+/* the yaga.sh family bar: the same strip at the top of every yaga.sh site, in yaga.sh's own warm dark colours */
+.yaga-bar { height: var(--yb); display: flex; align-items: center; padding: 0 var(--gut); background: #161514; border-bottom: 1px solid #2A2826; }
+.yaga-bar-link { display: inline-flex; align-items: center; gap: 6px; min-height: var(--yb); color: #C4BFB7; text-decoration: none; font: 400 11px/1 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: 0.02em; transition: color 0.2s ease; }
+.yaga-bar-link strong { color: #F5F4F2; font-weight: 500; }
+.yaga-bar-arrow { display: block; width: 12px; height: 12px; flex: none; transition: transform 0.2s ease; }
+.yaga-bar-mark { display: block; width: 16px; height: 16px; flex: none; }
+.yaga-bar-link:hover { color: #F5F4F2; }
+.yaga-bar-link:hover .yaga-bar-arrow { transform: translateX(-3px); }
+.yaga-bar-link:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; border-radius: 3px; }
+
+/* ── hero: the picture fills the screen; on a phone the words sit under the scene, on a desktop beside it ── */
+.hero { position: relative; min-height: calc(100vh - var(--yb)); min-height: calc(100svh - var(--yb)); display: flex; align-items: flex-end; overflow: hidden; isolation: isolate; }
+.shot { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.hero::after {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to bottom, rgba(21, 20, 18, 0) 36%, rgba(21, 20, 18, 0.88) 54%, var(--void) 68%);
+}
+.pitch { width: 100%; padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.who { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.who img { width: 56px; height: 56px; flex: none; border-radius: 50%; border: 2px solid var(--accent); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
+h1 { font: 800 clamp(64px, 19vw, 76px)/0.95 var(--display); letter-spacing: -0.035em; }
+.hook { margin-top: 8px; font: 600 clamp(20px, 5.6vw, 23px)/1.22 var(--display); letter-spacing: -0.01em; color: var(--gold); text-wrap: balance; }
+.intro { margin-top: 10px; font-size: 15.5px; line-height: 1.45; color: var(--dim); }
+.go { display: flex; align-items: center; gap: 18px; margin-top: 18px; }
+.start {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 190px; height: 60px; padding: 0 32px; border-radius: 18px;
+  background: var(--gold); color: var(--ink); border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink), 0 0 0 1px rgba(214, 164, 70, 0.5);
+  font: 700 22px/1 var(--display); text-decoration: none; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.start:hover { background: #E3B55C; transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink), 0 0 0 1px rgba(214, 164, 70, 0.5); }
+.start:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.more { font: 500 13px/1.3 var(--mono); color: var(--cream); text-underline-offset: 3px; text-decoration-color: var(--accent); }
+a:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; }
+
+/* the embroidery band from the front of her hut */
+.band {
+  height: 20px; background-color: var(--soot); background-size: 60px 20px; background-position: center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='20'%3E%3Cpath fill='%23C8442F' d='M10 3l7 7-7 7-7-7z'/%3E%3Cpath fill='%23D6A446' d='M30 3l7 7-7 7-7-7z'/%3E%3Cpath fill='%2386A24A' d='M50 3l7 7-7 7-7-7z'/%3E%3C/svg%3E");
+}
+
+/* ── how a day goes ── */
+.day, .keys { padding: 44px 20px; max-width: 1320px; margin: 0 auto; }
+h2 { font: 700 clamp(28px, 7.4vw, 36px)/1.1 var(--display); letter-spacing: -0.02em; }
+.beats { display: grid; gap: 34px; margin-top: 24px; }
+figure { position: relative; margin-bottom: 14px; }
+figure img { width: 100%; border-radius: 16px; border: 1px solid var(--line); }
+figcaption.cloud { position: absolute; left: 10px; bottom: -8px; max-width: calc(100% - 20px); font-size: 11.5px; letter-spacing: 0; padding: 7px 11px 8px; }
+time { display: block; margin-top: 20px; font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+h3 { margin-top: 6px; font: 700 21px/1.2 var(--display); letter-spacing: -0.01em; }
+.beats p { margin-top: 5px; color: var(--dim); }
+
+/* ── controls ── */
+.keys { display: grid; gap: 20px; border-top: 1px solid var(--line); }
+.keys > div > p { margin-top: 10px; color: var(--dim); max-width: 46ch; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.35; }
+th, td { padding: 11px 10px 11px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: 400; }
+thead th { font: 500 11px/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+tbody th { font-weight: 600; white-space: nowrap; }
+td { color: var(--dim); }
+kbd { display: inline-block; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; background: rgba(240, 234, 220, 0.08); font: 500 12px/1.4 var(--mono); color: var(--cream); }
+
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding: 22px 20px calc(26px + env(safe-area-inset-bottom, 0px)); background: var(--soot); font-size: 14px; color: var(--dim); }
+footer a { color: var(--cream); font-weight: 600; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+
+/* ── small phones: the words need all the room ── */
+@media (max-height: 740px) and (max-width: 799px) {
+  .who { display: none; }
+  .intro { font-size: 14.5px; }
+  .hero::after { background: linear-gradient(to bottom, rgba(21, 20, 18, 0) 26%, rgba(21, 20, 18, 0.88) 43%, var(--void) 54%); }
+}
+
+/* ── wider screens ── */
+@media (min-width: 620px) and (max-width: 799px) {
+  .beats { grid-template-columns: 1fr 1fr; gap: 34px 22px; }
+  .pitch { max-width: 620px; }
+  .hero::after { background: linear-gradient(to bottom, rgba(21, 20, 18, 0) 52%, rgba(21, 20, 18, 0.88) 64%, var(--void) 76%); }
+}
+@media (min-width: 800px) {
+  :root { --gut: clamp(32px, 6vw, 96px); }
+  .hero { align-items: center; }
+  .shot { object-position: 70% 40%; }
+  .hero::after { background: linear-gradient(to right, var(--void) 0%, rgba(21, 20, 18, 0.9) 30%, rgba(21, 20, 18, 0) 58%), linear-gradient(to top, rgba(21, 20, 18, 0.55), rgba(21, 20, 18, 0) 24%); }
+  .pitch { max-width: 600px; padding: 40px 0 40px clamp(32px, 6vw, 96px); box-sizing: content-box; }
+  .who { margin-bottom: 18px; }
+  .who img { width: 76px; height: 76px; }
+  h1 { font-size: clamp(88px, 9vw, 128px); }
+  .hook { margin-top: 12px; font-size: clamp(25px, 2.3vw, 31px); }
+  .intro { margin-top: 16px; font-size: 18px; line-height: 1.5; max-width: 34em; }
+  .go { margin-top: 28px; gap: 24px; }
+  .start { min-width: 220px; height: 68px; font-size: 25px; }
+  .day, .keys { padding: 72px clamp(32px, 6vw, 96px); }
+  .beats { grid-template-columns: repeat(4, 1fr); gap: 26px; margin-top: 34px; }
+  .keys { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 56px; align-items: start; }
+  table { font-size: 15px; }
+  footer { padding: 26px clamp(32px, 6vw, 96px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .start { transition: none; }
+  .yaga-bar-link:hover .yaga-bar-arrow { transform: none; }
+}

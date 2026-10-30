@@ -2,7 +2,7 @@
 
 ## What was wrong (diagnosis, before the rework)
 
-Found by playing the old build headless through `window.yaga` (`advance()`, real clicks on the canvas) and reading `code/app.js`.
+Found by playing the old build headless through `window.yaga` (`advance()`, real clicks on the canvas) and reading `code/app.js` (now `play/code/app.js`).
 
 1. **Days meant nothing.** The clock ran on the wall clock (`Date.now()`), the same for everyone. `advance()` could not move it, sleeping could not end a day, and the only thing a new day did was bring lost hens back.
 2. **Crops ignored the player.** A crop was ripe 300 real seconds after planting, watered or not, tab open or not. `advance(400)` left a fresh crop a sprout, because growth did not follow game time either.
@@ -57,7 +57,7 @@ Taps follow one rule: **if the tool in her hand can do something there, she does
 
 ## Where the numbers are
 
-Every balance number is in `settings.js`, with a note beside it:
+Every balance number is in `play/settings.js`, with a note beside it:
 
 | Section | What it sets |
 |---|---|
@@ -76,13 +76,13 @@ Every balance number is in `settings.js`, with a note beside it:
 | `hens` | starting and most hens, price, the yard |
 | `goals` | coin reward per goal |
 
-The words are all in `words/en.json` (run `tools/check_words.py` after editing it).
+The words are all in `play/words/en.json` (run `tools/check_words.py` after editing it).
 
 ## Code map
 
-- `code/day.js`: the game clock (`S.hour`), night, how many pests come, and `endDay()`, which resolves the night.
-- `code/farm.js`: plot rules (`ripe`, `atRisk`, `overnight`) and the action timings (`FARM`).
-- `code/inventory.js`: bag, coins, sell prices, the stall's offers.
-- `code/goals.js`: the goal list.
-- `code/hud.js`: the panels (stall, bag, goals, bed, morning summary), toasts and the hint line.
-- `code/app.js`: everything in the world. `planFor()` turns a tap into a plan. `command()` / `startOrder()` / `beginWork()` / `finish()` carry it out. `tickHer()` runs her modes. The pests, the hens, the input and the HUD are here too.
+- `play/code/day.js`: the game clock (`S.hour`), night, how many pests come, and `endDay()`, which resolves the night.
+- `play/code/farm.js`: plot rules (`ripe`, `atRisk`, `overnight`) and the action timings (`FARM`).
+- `play/code/inventory.js`: bag, coins, sell prices, the stall's offers.
+- `play/code/goals.js`: the goal list.
+- `play/code/hud.js`: the panels (stall, bag, goals, bed, morning summary), toasts and the hint line.
+- `play/code/app.js`: everything in the world. `planFor()` turns a tap into a plan. `command()` / `startOrder()` / `beginWork()` / `finish()` carry it out. `tickHer()` runs her modes. The pests, the hens, the input and the HUD are here too.

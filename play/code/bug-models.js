@@ -1,13 +1,11 @@
-// Bugs for the Black Box Pet: the things it eats instead of fruit (it's debugging, get it).
+// The bugs: the friendly ones she catches, and the same models big and red as the night pests.
 // Their colours and overall size are in assets/models/enemies/<id>.json; the shapes are drawn here.
-// Every bug is built from primitives with named meshes + materials, so the game can either call
-// makeBug(THREE, id) directly with its own three.js, or load the GLB exported from Bug Lab.
-// Units match the fruit GLBs (~0.4 long), y-up, resting on y = 0, head facing +z.
-// tick(t, a): idle/crawl animation; a = amplitude 0..1 (0 = rest pose, used for export).
+// Units: ~0.4 long, y-up, resting on y = 0, head facing +z.
+// tick(t, a): idle/crawl animation; a = amplitude 0..1 (0 = rest pose).
 
 import { getJSON } from './loading.js';
 
-// the bugs by id; their names (and the in-joke each stands for) are in words/en.json, under "bugs"
+// the bugs by id; their names are in words/en.json, under "bugs"
 export const BUGS = ['ladybug', 'firefly', 'caterpillar', 'snail', 'ant', 'beetle'].map((id) => ({ id }));
 const LOOKS = {};
 
