@@ -1,0 +1,28 @@
+{
+  "about": "The hens' feed trough. Each scoop of feed in it is one hen's breakfast; a fed hen lays an egg in the morning. The code shows the part called 'grain' (and raises it with the amount), so keep that name. About 1.2 m long. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. Where it stands is in code/app.js (TROUGH).",
+  "defaults": { "roughness": 0.9, "glow": 0.05 },
+  "materials": {
+    "wood": { "colour": "#6b4532" },
+    "darkWood": { "colour": "#3e2a1f" },
+    "grain": { "colour": "#D6A446", "glow": 0.12 }
+  },
+  "boxes": [
+    { "note": "side", "size": [1.2, 0.24, 0.06], "material": "wood", "at": [0, 0.22, -0.17] },
+    { "note": "side", "size": [1.2, 0.24, 0.06], "material": "wood", "at": [0, 0.22, 0.17] },
+    { "note": "end", "size": [0.06, 0.26, 0.4], "material": "darkWood", "at": [-0.6, 0.22, 0] },
+    { "note": "end", "size": [0.06, 0.26, 0.4], "material": "darkWood", "at": [0.6, 0.22, 0] },
+    { "note": "bottom", "size": [1.2, 0.05, 0.34], "material": "darkWood", "at": [0, 0.12, 0] },
+    { "note": "leg", "size": [0.06, 0.1, 0.06], "material": "darkWood", "at": [-0.52, 0.05, -0.14] },
+    { "note": "leg", "size": [0.06, 0.1, 0.06], "material": "darkWood", "at": [0.52, 0.05, -0.14] },
+    { "note": "leg", "size": [0.06, 0.1, 0.06], "material": "darkWood", "at": [-0.52, 0.05, 0.14] },
+    { "note": "leg", "size": [0.06, 0.1, 0.06], "material": "darkWood", "at": [0.52, 0.05, 0.14] }
+  ],
+  "parts": {
+    "grain": {
+      "at": [0, 0.15, 0],
+      "boxes": [
+        { "note": "grain", "size": [1.1, 0.16, 0.26], "material": "grain", "at": [0, 0.08, 0] }
+      ]
+    }
+  }
+}

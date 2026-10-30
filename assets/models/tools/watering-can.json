@@ -1,0 +1,25 @@
+{
+  "about": "A copper watering can, held by its upright back handle: the grip is at the origin (her fist), the can hangs in front of it and the spout points forward (+z). Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you.",
+  "defaults": { "roughness": 0.55, "glow": 0.04 },
+  "materials": {
+    "copper": { "colour": "#b06a3b", "metalness": 0.35 },
+    "band": { "colour": "#7a4528", "metalness": 0.35 },
+    "rose": { "colour": "#D6A446", "metalness": 0.4 }
+  },
+  "parts": {
+    "can": {
+      "at": [0, -0.06, 0],
+      "boxes": [
+        { "note": "handle", "size": [0.035, 0.18, 0.035], "material": "band", "at": [0, 0, 0] },
+        { "note": "handle, top arm", "size": [0.035, 0.035, 0.1], "material": "band", "at": [0, 0.085, 0.05] },
+        { "note": "handle, bottom arm", "size": [0.035, 0.035, 0.1], "material": "band", "at": [0, -0.085, 0.05] },
+        { "note": "body", "size": [0.2, 0.24, 0.26], "material": "copper", "at": [0, -0.05, 0.19] },
+        { "note": "band", "size": [0.21, 0.03, 0.27], "material": "band", "at": [0, -0.15, 0.19] },
+        { "note": "band", "size": [0.21, 0.03, 0.27], "material": "band", "at": [0, 0.05, 0.19] },
+        { "note": "lid", "size": [0.15, 0.02, 0.18], "material": "band", "at": [0, 0.075, 0.19] },
+        { "note": "spout", "size": [0.035, 0.035, 0.24], "material": "copper", "at": [0, 0.04, 0.42], "turn": [-35, 0, 0] },
+        { "note": "rose", "size": [0.07, 0.07, 0.04], "material": "rose", "at": [0, 0.115, 0.53], "turn": [-35, 0, 0] }
+      ]
+    }
+  }
+}

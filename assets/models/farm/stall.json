@@ -1,0 +1,40 @@
+{
+  "about": "Her market stall, where she sells what she grows and buys seeds: a counter under a striped awning, facing forward (+z). About 1.9 m wide. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. Where it stands is in code/app.js (STALL).",
+  "defaults": { "roughness": 0.85, "glow": 0.06 },
+  "materials": {
+    "wood": { "colour": "#6b4532" },
+    "darkWood": { "colour": "#3e2a1f" },
+    "trim": { "colour": "#B32A1F" },
+    "stripe": { "colour": "#CF6E42" },
+    "cream": { "colour": "#F0EADC" },
+    "gold": { "colour": "#D6A446", "metalness": 0.2, "glow": 0.2 },
+    "pumpkin": { "colour": "#d2762a" },
+    "cabbage": { "colour": "#9cba62" },
+    "egg": { "colour": "#F0EADC", "glow": 0.12 }
+  },
+  "boxes": [
+    { "note": "counter", "size": [1.8, 0.9, 0.7], "material": "wood", "at": [0, 0.45, 0.15] },
+    { "note": "counter top", "size": [1.9, 0.06, 0.8], "material": "darkWood", "at": [0, 0.93, 0.15] },
+    { "note": "trim", "size": [1.82, 0.08, 0.02], "material": "trim", "at": [0, 0.72, 0.51] },
+    { "note": "post", "size": [0.08, 2.1, 0.08], "material": "darkWood", "at": [-0.88, 1.05, -0.35] },
+    { "note": "post", "size": [0.08, 2.1, 0.08], "material": "darkWood", "at": [0.88, 1.05, -0.35] },
+    { "note": "post", "size": [0.08, 1.95, 0.08], "material": "darkWood", "at": [-0.88, 0.98, 0.55] },
+    { "note": "post", "size": [0.08, 1.95, 0.08], "material": "darkWood", "at": [0.88, 0.98, 0.55] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "stripe", "at": [-0.85, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "cream", "at": [-0.51, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "stripe", "at": [-0.17, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "cream", "at": [0.17, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "stripe", "at": [0.51, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "awning", "size": [0.34, 0.05, 1.25], "material": "cream", "at": [0.85, 2.02, 0.1], "turn": [10, 0, 0] },
+    { "note": "valance", "size": [2.0, 0.14, 0.03], "material": "stripe", "at": [0, 1.86, 0.74] },
+    { "note": "sign", "size": [0.8, 0.28, 0.05], "material": "darkWood", "at": [0, 2.42, -0.3] },
+    { "note": "coin on the sign", "shape": "sphere", "size": [0.18, 0.18, 0.04], "material": "gold", "at": [0, 2.42, -0.26] },
+    { "note": "pumpkin", "size": [0.22, 0.16, 0.22], "material": "pumpkin", "at": [-0.6, 1.04, 0.12] },
+    { "note": "pumpkin", "size": [0.2, 0.15, 0.2], "material": "pumpkin", "at": [-0.32, 1.035, 0.3], "turn": [0, 30, 0] },
+    { "note": "cabbage", "shape": "sphere", "size": [0.19, 0.16, 0.19], "material": "cabbage", "at": [0.36, 1.04, 0.24] },
+    { "note": "cabbage", "shape": "sphere", "size": [0.19, 0.16, 0.19], "material": "cabbage", "at": [0.6, 1.04, 0.06] },
+    { "note": "basket", "size": [0.28, 0.1, 0.2], "material": "wood", "at": [0.02, 1.01, 0.0] },
+    { "note": "egg", "shape": "sphere", "size": [0.08, 0.1, 0.08], "material": "egg", "at": [-0.05, 1.08, 0.0] },
+    { "note": "egg", "shape": "sphere", "size": [0.08, 0.1, 0.08], "material": "egg", "at": [0.06, 1.08, 0.03] }
+  ]
+}

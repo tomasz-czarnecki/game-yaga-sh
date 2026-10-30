@@ -2,16 +2,16 @@
   "lang": "en",
   "yaga": {
     "first": [
-      "oh. a human. tap a bug down there. i'll handle it."
+      "new farm. dig with the shovel, plant, water. the goals are top left. i'll complain."
     ],
     "hello": [
-      "oh. you're back.",
+      "oh. you're back. the crops didn't water themselves.",
       "took you long enough.",
       "hi. the box is with me. sadly."
     ],
     "away": [
       "gone {n}. i counted.",
-      "{n}. not one bug. #@%!.",
+      "{n}. the farm waited. it had no choice.",
       "{n} away and you bring NOTHING?"
     ],
     "tab": [
@@ -20,138 +20,184 @@
       "gone {n} seconds. i counted.",
       "other tabs are prettier? fine."
     ],
-    "hunt": [
-      "on it.",
-      "target acquired.",
-      "running query.",
-      "it can't hide."
-    ],
-    "foe": [
-      "something crawled out of the dirt.",
-      "that one has teeth. #@%!.",
-      "bugs. with an attitude.",
-      "oh good. the biting kind."
-    ],
-    "foeCalm": [
-      "something big crawled out of the dirt.",
-      "a big one. it hasn't noticed me. good.",
-      "red bug. leave it be.",
-      "it's just wandering. so am i."
-    ],
-    "foeAngry": [
-      "now it's cross. nice going.",
-      "it bites back. of course it does.",
-      "i poked it. it noticed.",
-      "ok. now it's personal."
-    ],
-    "bitten": [
-      "ow. #@%!.",
-      "it BIT me.",
-      "i'm not a snack.",
-      "rude."
-    ],
-    "wrongTool": [
-      "that needs the broom. press 1.",
-      "a shovel is not a flyswatter.",
-      "broom. key 1. try it."
-    ],
-    "tired": [
-      "too tired to swing.",
-      "give me a minute. #@%!.",
-      "arms. noodles. wait."
-    ],
-    "foeDown": [
-      "and stay down.",
-      "one less. forty to go.",
-      "squish. next."
-    ],
-    "faint": [
-      "i'm not dead. just resting. loudly.",
-      "the ground is nice. i'll stay."
-    ],
     "dug": [
       "farmland. i'm a farmer now. help.",
-      "nice dirt. now it needs a plan.",
-      "one plot. forty to go."
-    ],
-    "cantDig": [
-      "can't dig that. plain dirt or grass, please.",
-      "that is water, stone or rude.",
-      "not there. i have standards."
+      "nice dirt. now it needs seeds.",
+      "one more plot. my back says hi."
     ],
     "planted": [
-      "in it goes. now we wait. i hate waiting.",
+      "in it goes. now it needs water.",
       "grow. or don't. i'm not your mother.",
-      "seeds. in dirt. what a plan."
+      "seeds. in dirt. water it, genius."
     ],
-    "noMana": [
-      "not ripe. and no mana to hurry it.",
-      "it needs time or mana. i have neither.",
-      "wait a day. or wait for mana."
+    "wateredOne": [
+      "drink up.",
+      "there. wet dirt. thrilling.",
+      "one a day, or it sulks."
+    ],
+    "canEmpty": [
+      "can's empty. the well, please.",
+      "out of water. #@%!.",
+      "dry can. the well is right there."
+    ],
+    "filled": [
+      "full can. heavy can.",
+      "water. free. for once.",
+      "glug glug. done."
     ],
     "harvest": [
-      "ripe. delicious. mine.",
+      "ripe. mine. into the bag.",
       "crunch. farming is fine, actually.",
-      "harvested. and eaten. efficient."
-    ],
-    "henHurt": [
-      "the hens. it's biting the hens.",
-      "leave the chicken alone.",
-      "that's MY chicken."
-    ],
-    "henLost": [
-      "a hen is gone. it'll be back at dawn. probably.",
-      "one hen down. rude.",
-      "the bugs ate a hen. #@%!."
-    ],
-    "henBack": [
-      "the hens are back. dawn fixes everything.",
-      "morning. the flock is whole again."
-    ],
-    "defend": [
-      "not on my watch.",
-      "back off. i have a broom.",
-      "swat time."
-    ],
-    "henPet": [
-      "good hen. she doesn't care.",
-      "she likes you. disgusting.",
-      "cluck. i agree."
-    ],
-    "egg": [
-      "an egg. free food. the hens are useful.",
-      "still warm. don't think about it.",
-      "egg. into the face. i mean mouth."
+      "harvested. the stall will pay for that."
     ],
     "grown": [
       "grow up. now.",
       "magic. the dirt never saw it coming.",
       "one day in one second. you're welcome."
     ],
-    "nobug": [
-      "no {bug}s around. wait for one.",
-      "zero {bug}s found. 404.",
-      "{bug}? not here. try again later."
+    "grownRipe": [
+      "ripe. by magic. don't tell the neighbours.",
+      "done. witchcraft beats waiting."
     ],
-    "busy": [
-      "not now. i'm handling it.",
-      "busy. very busy. important busy."
+    "sold": [
+      "coins. lovely coins.",
+      "sold. don't spend it all on seeds. spend it on seeds.",
+      "money for vegetables. what a world."
     ],
-    "sick": [
-      "i feel #@%!.",
-      "health: declining. patience: gone.",
-      "everything hurts. thanks for asking.",
-      "i'm not dying. i'm buffering."
+    "bought": [
+      "bought. now use it.",
+      "into the bag.",
+      "shopping. my favourite chore."
+    ],
+    "newHen": [
+      "a new hen. she already hates me.",
+      "another mouth. another egg, if you feed her."
+    ],
+    "upgrade": [
+      "new tool. shiny. mine.",
+      "an upgrade. i feel almost professional."
+    ],
+    "egg": [
+      "an egg. the stall will want that.",
+      "still warm. don't think about it.",
+      "egg. into the bag, not my mouth."
+    ],
+    "fed": [
+      "breakfast is served. eggs tomorrow.",
+      "eat up, chickens. lay something.",
+      "trough full. hens happy. ish."
+    ],
+    "caught": [
+      "got the {bug}. the stall buys these.",
+      "{bug}. caught. no refunds.",
+      "a {bug} for the bag."
     ],
     "escaped": [
       "it got away. #@%!.",
       "too slow. me, not it.",
       "that bug had places to be."
     ],
-    "yum": [
-      "crunchy. ate it anyway.",
-      "edible. 6/10.",
-      "close enough. #@%!."
+    "pest": [
+      "something's crawling to the crops.",
+      "pests. at my vegetables. #@%!.",
+      "red bug, hungry look. broom time."
+    ],
+    "pestAte": [
+      "it ate my {crop}. #@%!.",
+      "a pest got the {crop}. water them, they leave them alone.",
+      "{crop}: gone. eaten. rude."
+    ],
+    "swat": [
+      "and stay out.",
+      "one less. squish.",
+      "not my vegetables. not today."
+    ],
+    "exhausted": [
+      "done. i'm sitting down. don't argue.",
+      "no more stamina. i need a minute.",
+      "my arms quit. so do i, briefly."
+    ],
+    "rested": [
+      "fine. a bit more. then bed.",
+      "back up. barely.",
+      "rested. ish. bed would be better."
+    ],
+    "resting": [
+      "resting. ask the box.",
+      "not now. sitting.",
+      "i said i'm resting."
+    ],
+    "passOut": [
+      "two in the morning. goodnight, world.",
+      "too late. i'm... done..."
+    ],
+    "wokeSore": [
+      "the box dragged me home. my back.",
+      "slept on the floor. never again. probably again."
+    ],
+    "morning": [
+      "morning. the crops want water.",
+      "WHO TURNED THE SUN ON.",
+      "new day. same dirt."
+    ],
+    "night": [
+      "dark. pests come out for dry or ripe crops.",
+      "night shift. keep the broom handy."
+    ],
+    "goal": [
+      "look at me, achieving.",
+      "goal done. i want a medal.",
+      "progress. disgusting."
+    ],
+    "stallClosed": [
+      "the stall's shut. it opens at six.",
+      "closed. even shops sleep."
+    ],
+    "troughFull": [
+      "the trough's full. greedy birds.",
+      "they have enough. trust me."
+    ],
+    "noFeed": [
+      "no hen feed. the stall sells it.",
+      "feed with what? air?"
+    ],
+    "canFull": [
+      "the can's already full.",
+      "full. any fuller and it's a pond."
+    ],
+    "needBroom": [
+      "that needs the broom. key 6.",
+      "a pest. get the broom.",
+      "broom. now. before it eats something."
+    ],
+    "digFirst": [
+      "dig it first. shovel, key 2.",
+      "seeds don't go in grass. dig."
+    ],
+    "noSeeds": [
+      "out of those seeds. the stall has more.",
+      "no seeds. no farm. shop."
+    ],
+    "waterFirst": [
+      "water it first. magic needs wet dirt.",
+      "a dry plant won't take the spell."
+    ],
+    "noMana": [
+      "no mana. sleep, or swat pests.",
+      "out of magic. #@%!."
+    ],
+    "notRipe": [
+      "not ripe yet.",
+      "patience. ugh."
+    ],
+    "watered": [
+      "already watered today.",
+      "it's had its drink."
+    ],
+    "henPet": [
+      "good hen. she doesn't care.",
+      "she likes you. disgusting.",
+      "cluck. i agree."
     ],
     "poke": [
       "ow.",
@@ -178,19 +224,10 @@
       "walking. happy now?",
       "that's far. #@%!."
     ],
-    "night": [
-      "dark already? good. bugs get careless at night.",
-      "night shift. same complaints, fewer witnesses."
-    ],
-    "wake": [
-      "WHO TURNED THE SUN ON.",
-      "five more minutes. too late.",
-      "morning. i hate it."
-    ],
     "sleepy": [
-      "low battery. 12%.",
+      "stamina low. bed soon.",
       "that was a yawn. take the hint.",
-      "turn the lights off. please."
+      "the hut has a bed. just saying."
     ],
     "sleep_poke": [
       "zz... no.",
@@ -200,7 +237,7 @@
     "idle": [
       "hello?",
       "did you die?",
-      "i'm bored. point at a bug.",
+      "the crops won't water themselves.",
       "fine. i'll talk to myself.",
       "tap tap. is this thing on?"
     ],
@@ -223,12 +260,6 @@
     "only i get to annoy it."
   ],
   "box": {
-    "eat": [
-      "that one was mine.",
-      "chew with your mouth closed.",
-      "you didn't even share.",
-      "rated: suspicious."
-    ],
     "yagaPoked": [
       "ha. do it again.",
       "finally, someone gets it.",
@@ -239,10 +270,6 @@
       "please stop.",
       "i'm not with her."
     ],
-    "nap": [
-      "lightweight.",
-      "zzz? already?"
-    ],
     "poked": [
       "hey!",
       "i'm not the main character. stop.",
@@ -251,13 +278,32 @@
     ],
     "night": [
       "it's dark. i'm darker.",
-      "finally. my colour."
+      "finally. my colour.",
+      "pests out. i'm staying in."
     ],
-    "home": [
-      "your house has legs. mine has corners.",
-      "it's staring at me.",
-      "does it bite?",
-      "i'm sleeping outside."
+    "rest": [
+      "lightweight.",
+      "zzz? already?",
+      "i'll carry nothing."
+    ],
+    "harvest": [
+      "a vegetable. riveting.",
+      "you grew that? statistically unlikely.",
+      "into the bag. like a professional."
+    ],
+    "sold": [
+      "capitalism. finally.",
+      "buy me something.",
+      "profit margin: suspicious."
+    ],
+    "pest": [
+      "something's eating the farm.",
+      "red bug. not my problem.",
+      "i'd swat it. if i had arms."
+    ],
+    "morning": [
+      "morning. i didn't sleep. i don't sleep.",
+      "the crops grew. you're welcome. i watched."
     ]
   },
   "arguments": [
@@ -357,25 +403,160 @@
   },
   "ui": {
     "title": "Game · Yaga Labs",
-    "stage": "Yaga and her black box in the clearing. Tap the ground to call her, tap her or the box to poke them, stroke her to pet her. They talk back, mostly to each other.",
+    "stage": "Yaga's farm. Tap the ground to walk there; tap with a tool to use it: dig, plant, water, harvest. WASD or the arrow keys walk, E or Space uses the tool in front of her, 1 to 7 pick a tool.",
     "portrait": "Yaga",
-    "tray": "Bugs out there: tap one to hunt it",
-    "trayHunt": "Hunt {a} ({n} around)",
-    "trayNone": "No {plural} around",
-    "hotbar": "Health, mana, stamina and tools",
-    "health": "Health",
-    "mana": "Mana",
+    "hotbar": "Tools, keys 1 to 7",
+    "coins": "Coins",
     "stamina": "Stamina",
-    "tools": "Tool in her hand",
-    "broom": "Broomstick (key 1)",
-    "shovel": "Shovel (key 2)",
-    "soundOff": "Sound off",
-    "soundOn": "Sound on",
-    "clock": "Time of day",
-    "clockAria": "{time}, {phase}. {next}.",
-    "nextIn": "{phase} in {m}:{s}",
+    "mana": "Mana",
+    "clock": "Day and time",
+    "tool": {
+      "hand": "Hand (key 1)",
+      "shovel": "Shovel (key 2)",
+      "can": "Watering can (key 3)",
+      "seed:pumpkin": "Pumpkin seeds (key 4)",
+      "seed:cabbage": "Cabbage seeds (key 5)",
+      "broom": "Broom (key 6)",
+      "spell": "Grow spell (key 7)"
+    },
+    "toolHint": {
+      "hand": "Hand: harvest ripe crops, pick up eggs, catch bugs. Tap the ground to walk.",
+      "shovel": "Shovel: tap grass or dirt to dig it into farmland.",
+      "can": "Watering can: water each crop once a day. Fill it at the well.",
+      "seed:pumpkin": "Pumpkin seeds: plant in dug soil. Ripe after 4 watered days.",
+      "seed:cabbage": "Cabbage seeds: plant in dug soil. Ripe after 3 watered days.",
+      "broom": "Broom: swat the pests that come for your crops at night.",
+      "spell": "Grow spell: a watered crop grows a day at once. Costs mana."
+    },
+    "act": {
+      "walk": "Walk here",
+      "dig": "Dig",
+      "plant": "Plant {crop} ({n} seeds)",
+      "water": "Water ({n} left)",
+      "harvest": "Harvest the {crop}",
+      "grow": "Cast Grow",
+      "pick": "Pick up the egg",
+      "catch": "Catch the {bug}",
+      "swat": "Swat the pest",
+      "fill": "Fill the can",
+      "feed": "Fill the trough",
+      "pet": "Pet the hen",
+      "shop": "Open the stall",
+      "bed": "Go to bed",
+      "nothing": "Nothing to do here"
+    },
+    "no": {
+      "closed": "The stall opens at 6:00",
+      "trough": "The trough is full",
+      "feed": "No hen feed: buy some at the stall",
+      "full": "The can is full",
+      "broom": "Pests need the broom (key 6)",
+      "water": "The can is empty: fill it at the well",
+      "undug": "Dig it first (shovel, key 2)",
+      "seeds": "No {item} left: buy some at the stall",
+      "dry": "Water it first",
+      "mana": "Not enough mana",
+      "growing": ["{crop}: ripe tomorrow if watered", "{crop}: ripe in {n} days if watered"],
+      "watered": "Watered today"
+    },
+    "items": {
+      "pumpkin": "Pumpkin",
+      "cabbage": "Cabbage",
+      "egg": "Egg",
+      "seed:pumpkin": "Pumpkin seeds",
+      "seed:cabbage": "Cabbage seeds",
+      "feed": "Hen feed",
+      "hen": "A hen",
+      "bigCan": "Big watering can",
+      "steelShovel": "Steel shovel"
+    },
+    "itemInfo": {
+      "seed": "Ripe after {days} watered days. Sells for {sell}.",
+      "feed": "One scoop feeds one hen for a day. A fed hen lays an egg.",
+      "hen": "You have {n} of {most}. Lays an egg each morning she is fed.",
+      "bigCan": "Holds {n} waterings instead of {m}.",
+      "steelShovel": "Digging takes half the stamina."
+    },
+    "stall": {
+      "title": "Market stall",
+      "sell": "Sell",
+      "buy": "Buy",
+      "coins": "{n} coins",
+      "each": "{n} coins each",
+      "price": "{n}",
+      "sellOne": "Sell 1",
+      "sellAll": "Sell all",
+      "sellEverything": "Sell everything: {n} coins",
+      "nothing": "Nothing to sell yet. Crops, eggs and bugs sell here.",
+      "buyOne": "Buy",
+      "buyMany": "×{n}",
+      "have": "have {n}",
+      "owned": "Yours",
+      "coopFull": "Coop full"
+    },
+    "bag": {
+      "open": "Her bag",
+      "title": "Her bag",
+      "empty": "Empty. Go and grow something.",
+      "can": "Watering can: {n} of {m} waterings left."
+    },
+    "goal": {
+      "open": "Goals",
+      "title": "Goals",
+      "next": "Next: {goal}",
+      "allDone": "Every goal done",
+      "reached": "Goal: {goal}!",
+      "reward": "+{n} coins"
+    },
+    "goals": {
+      "dig": "Dig a plot with the shovel",
+      "plant": "Plant a seed in it",
+      "water": "Water a crop with the can",
+      "harvest": "Harvest your first crop",
+      "sell": "Sell something at the stall",
+      "coins100": "Earn 100 coins",
+      "egg": "Feed the hens, then collect an egg",
+      "pest": "Swat a night pest with the broom",
+      "bugs": "Catch 3 kinds of bugs",
+      "bigCan": "Buy the big watering can",
+      "field": "Grow 12 crops at once",
+      "hens": "Keep 4 hens",
+      "coins1000": "Earn 1,000 coins"
+    },
+    "bed": {
+      "title": "Go to bed?",
+      "early": "It's only {time}. Sleeping ends the day: watered crops grow, the soil dries, fed hens lay.",
+      "late": "Sleeping ends the day: watered crops grow, the soil dries, fed hens lay. Pests may still visit dry or ripe crops.",
+      "sleep": "Sleep",
+      "stay": "Not yet"
+    },
+    "summary": {
+      "title": "Day {day}",
+      "passedOut": "You passed out at 2:00 and the Box dragged you home. Stamina {n}%.",
+      "earned": ["Yesterday you sold 1 thing for {coins} coins.", "Yesterday you sold {n} things for {coins} coins."],
+      "eaten": ["A pest ate 1 dry or ripe crop in the night.", "Pests ate {n} dry or ripe crops in the night."],
+      "grew": ["1 watered crop grew a day.", "{n} watered crops grew a day."],
+      "ripened": ["1 crop is ripe: harvest it.", "{n} crops are ripe: harvest them."],
+      "dry": ["1 crop was dry and didn't grow.", "{n} crops were dry and didn't grow."],
+      "eggs": ["The hens laid 1 egg.", "The hens laid {n} eggs."],
+      "hungry": ["1 hen went hungry: fill the trough.", "{n} hens went hungry: fill the trough."],
+      "reverted": ["1 bare plot turned back to plain ground.", "{n} bare plots turned back to plain ground."],
+      "quiet": "A quiet night.",
+      "start": "Start day {day}"
+    },
+    "close": "Close",
+    "dayN": "Day {n}",
+    "clockAria": "{time}, day {day}, {phase}",
     "day": "day",
     "night": "night",
+    "nightPests": "Night: pests are coming for dry or ripe crops. Broom: key 6.",
+    "nightQuiet": "Night. Every crop is watered: the pests will stay away.",
+    "pestHint": "A pest is going for your crops: take the broom (key 6) and tap it.",
+    "resting": "Out of stamina: resting {n} s. A night in bed fills it.",
+    "plusItem": "+1 {item}",
+    "plusCoins": "+{n} coins",
+    "soundOff": "Sound off",
+    "soundOn": "Sound on",
     "home": "Back to Yaga Labs",
     "homeText": "YagaLabs",
     "loading": "Waking Yaga",

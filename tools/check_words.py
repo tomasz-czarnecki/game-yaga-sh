@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-code = (ROOT / "code" / "app.js").read_text()
+code = "\n".join(f.read_text() for f in sorted((ROOT / "code").glob("*.js")))   # every module, not code/lib
+app = (ROOT / "code" / "app.js").read_text()
 page = (ROOT / "index.html").read_text()
 bug_ids = re.findall(r"'(\w+)'", re.search(r"export const BUGS = \[(.*?)\]", (ROOT / "code" / "bug-models.js").read_text()).group(1))
 
@@ -49,6 +50,11 @@ for key, plus in re.findall(r"\b(?:say|drawLine)\(\s*'(\w+)'\s*(\+)?", code):
             used_yaga.add(key + bug)
     else:
         used_yaga.add(key)
+for a, b in re.findall(r"\bsay\([^;'\n]*\?\s*'(\w+)'\s*:\s*'(\w+)'", code):   # say(x ? 'one' : 'other')
+    used_yaga |= {a, b}
+no_say = re.search(r"const NO_SAY = \{(.*?)\};", app, re.S)                       # her line for each reason she can't
+no_say = dict(re.findall(r"(\w+): '(\w+)'", no_say.group(1))) if no_say else {}
+used_yaga |= set(no_say.values())
 used_yaga |= set(re.findall(r"\bLINES\.(\w+)", code))
 for key in sorted(used_yaga):
     if key not in yaga:
@@ -70,11 +76,32 @@ def has(path):
 
 for path in sorted(set(re.findall(r"\bUI\.(\w+(?:\.\w+)*)", code))):
     if not has(path):
-        errors.append(f"ui.{path} missing (used in code/app.js)")
+        errors.append(f"ui.{path} missing (used in code/)")
 for attr in ("data-word", "data-word-aria", "data-word-alt"):
-    for path in sorted(set(re.findall(rf'{attr}="([\w.]+)"', page))):
+    for path in sorted(set(re.findall(rf'{attr}="([\w.:]+)"', page))):
         if not has(path):
             errors.append(f"ui.{path} missing (used by {attr} in index.html)")
+
+# tables the code looks up by a key it works out: each needs every key
+def need(table, keys, what):
+    for k in keys:
+        if k not in ui.get(table, {}):
+            errors.append(f"ui.{table}.{k} missing ({what})")
+tools = re.findall(r"'([\w:]+)'", re.search(r"const TOOLS = \[(.*?)\]", app).group(1))
+need("tool", tools, "a hotbar slot"); need("toolHint", tools, "a hotbar slot")
+need("no", no_say.keys(), "a reason in NO_SAY")
+acts = re.findall(r"^  (\w+): \{ clip", (ROOT / "code" / "farm.js").read_text(), re.M) + ["walk", "swat", "shop", "bed", "nothing"]
+need("act", acts, "an action")
+goals = re.findall(r"\{ id: '(\w+)'", (ROOT / "code" / "goals.js").read_text())
+need("goals", goals, "a goal in code/goals.js")
+crops = re.findall(r"^    (\w+): \{ days", (ROOT / "settings.js").read_text(), re.M)
+need("items", crops + [f"seed:{c}" for c in crops] + ["egg", "feed", "hen", "bigCan", "steelShovel"], "an item")
+for key in ("growing",):
+    if not isinstance(ui.get("no", {}).get(key), list) or len(ui["no"][key]) != 2:
+        errors.append(f"ui.no.{key} must be [one, many]")
+for key, pair in ui.get("summary", {}).items():
+    if isinstance(pair, list) and len(pair) != 2:
+        errors.append(f"ui.summary.{key} must be [one, many]")
 
 for bug in bug_ids:
     entry = words["bugs"].get(bug, {})
@@ -83,18 +110,32 @@ for bug in bug_ids:
             errors.append(f"bugs.{bug}.{field} missing")
 
 # placeholders must be ones the code fills in
-fills = {"n", "bug"}
+fills = {"n", "bug", "crop"}
 for table in (yaga, box):
     for key, lines in table.items():
         for line in lines:
             for slot in re.findall(r"\{(\w+)\}", line):
                 if slot not in fills:
                     errors.append(f"unknown {{{slot}}} in: {line}")
-ui_slots = {"trayHunt": {"a", "n"}, "trayNone": {"plural"}, "clockAria": {"time", "phase", "next"}, "nextIn": {"phase", "m", "s"}}
-for key, allowed in ui_slots.items():
-    for slot in re.findall(r"\{(\w+)\}", ui.get(key, "")):
-        if slot not in allowed:
-            errors.append(f"ui.{key}: unknown {{{slot}}} (allowed: {', '.join(sorted(allowed))})")
+# the screen's placeholders: the ones its code fills in (a table's entries share its list)
+ui_slots = {"clockAria": {"time", "day", "phase"}, "dayN": {"n"}, "resting": {"n"}, "plusItem": {"item"}, "plusCoins": {"n"},
+            "act": {"crop", "n", "item", "bug"}, "no": {"crop", "n", "item", "bug"}, "itemInfo": {"days", "sell", "n", "m", "most"},
+            "stall": {"n"}, "bag": {"n", "m"}, "goal": {"goal", "n"}, "bed": {"time"}, "summary": {"n", "coins", "day"}}
+def texts(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, list):
+        for x in node:
+            yield from texts(x)
+    elif isinstance(node, dict):
+        for x in node.values():
+            yield from texts(x)
+for key, node in ui.items():
+    allowed = ui_slots.get(key, set())
+    for text in texts(node):
+        for slot in re.findall(r"\{(\w+)\}", text):
+            if slot not in allowed:
+                errors.append(f"ui.{key}: unknown {{{slot}}} in: {text}")
 
 # lists nothing seems to use (fine if the code builds the key some other way)
 for key in sorted(set(yaga) - used_yaga):

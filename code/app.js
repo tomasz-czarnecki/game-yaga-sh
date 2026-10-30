@@ -1,16 +1,23 @@
-// Yaga Game: Yaga living in the clearing. She hunts bugs, sleeps under the tree at night
-// and complains about everything. World and brain come from the whybox.ai pet game; the black box
-// creature is replaced by the rigged, dressed 3D Yaga (assets/models/yaga/yaga-dressed.glb).
+
+// Yaga Game: a small farm game. Yaga, a witch whose hut stands on chicken legs, farms a clearing of 50 cm blocks:
+// she digs, plants, waters and harvests pumpkins and cabbages, keeps hens, trades at her stall, and swats the pests
+// that come for her crops at night. The player steers her (tap or click to walk or to use the tool in hand; WASD and
+// E on a keyboard) and she only does what she is told. The farm's rules are in farm.js, day.js, inventory.js and
+// goals.js, the panels in hud.js. The black box, her furry sidekick, follows her about and comments on everything.
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
-import { BUGS, loadBugLooks, makeBug } from './bug-models.js';
-import { loadBlocks, loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell } from './terrain.js';
+import { loadBugLooks, makeBug } from './bug-models.js';
+import { loadBlocks, loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell, untillCell, wetCell, isWater } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
-import { SWING, makeShovel, attachInHand } from './tools.js';
-import { FARM, CROPS, GROW, stageOf, makeCrop } from './farm.js';
+import { SWING, makeShovel, makeCan, makeSeedBag, attachInHand } from './tools.js';
+import { FARM, CROPS, CROP_KINDS, ripe, stageOf, daysLeft, atRisk, newPlot, makeCrop } from './farm.js';
+import { HOUR, WAKE, PASS_OUT, isNight, clockText, pestsDue, endDay } from './day.js';
+import { count, add, take, canHolds } from './inventory.js';
+import { reached, nextGoal } from './goals.js';
+import { initHud, panelOpen, closePanel, openStall, openBag, openGoals, openBed, openSummary, toast, hint, fill, plural } from './hud.js';
 import SET from '../settings.js';
 import { makeChicken, makeEgg } from './chickens.js';
-import { loadBoxModels } from './box-model.js';
+import { loadBoxModels, buildBoxModel } from './box-model.js';
 import { getJSON, loadGLB, building, hide } from './loading.js';
 
 /* ───────────── helpers ───────────── */
@@ -33,10 +40,10 @@ function useWords(w) {
   ({ glyphs: GLY, words: WORDS, tokens: TOKS } = w.gibberish);
   document.documentElement.lang = w.lang;
 }
-/** Fills the {name} slots of a template; slots it is not given are left as they are. */
-const fill = (template, vars) => template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
 /** The bug's plain name ('ant'), or its id if the words file does not know it. */
 const bugName = (id) => (BUG[id] ? BUG[id].name : id);
+/** An item's name on screen: 'pumpkin' → "Pumpkin", 'bug:snail' → "Snail". */
+const itemName = (k) => (k.startsWith('bug:') ? bugName(k.slice(4)).replace(/^./, (c) => c.toUpperCase()) : UI.items[k] || k);
 /** Puts the words into the page's fixed labels: data-word is the text, data-word-aria the aria-label, data-word-alt the alt text. */
 function labelPage() {
   const at = (path) => path.split('.').reduce((o, k) => o[k], UI);
@@ -70,8 +77,9 @@ const ENV_COLORS = { M_Env_Bark: 0x5a3a2a, M_Env_Rock: 0x9a7a60, M_Env_Peak: 0xD
 const GLOW_COLOR = 0xD6A446;                // the homepage gold
 const TREE_PARTS = /^(Tree_|Branch_|Leaf_|Fruit_)/;
 const GLOW = { bark: 0.3, leaf: 0.6, fruit: 2.6 };
-const FRUITS = ['strawberry', 'orange', 'blueberry', 'mushroom'];   // hidden for now: she eats bugs
-const FOODS = BUGS.map((b) => b.id);
+const FRIENDLY = SET.bugs.kinds;            // bugs she can catch and sell
+const PEST_KINDS = SET.pests.kinds;         // the same models, big and red: the night pests
+const BUG_KINDS = [...new Set([...FRIENDLY, ...PEST_KINDS])];
 const BUG_SIZE = 0.4;                     // bugs at 40% of the original game's size, so Yaga towers over them
 const BUG_S = 2.6 * BUG_SIZE;             // bug-models units → world
 const BUG_TAP_R = 0.45;                   // world radius of a bug's invisible tap target, so small bugs stay easy to tap
@@ -91,15 +99,9 @@ const SCENERY = {
   rocks: [[-8, 5], [15, 6], [-21, -11], [25, -5], [33, -13], [-29, -3]],
 };
 const CANOPY = new THREE.Vector3(3.25, 3.4 * TREE_SCALE, -2.05);
-const SAVE_KEY = 'yaga-pet-v1';
-const DOCK_H = 100;                       // px at the bottom of the screen taken by the hotbar
-const FLOCK = SET.hens.flock;             // the hens she keeps
-const DAY_LEN = SET.day.length;           // seconds per in-game day (24h)
-const DAWN = SET.day.nightEnds / 24, DUSK = SET.day.nightStarts / 24;   // night runs 20:00 → 06:00
-const dayRaw = () => ((Date.now() / 1000) % DAY_LEN + DAY_LEN) % DAY_LEN;
-const dayFrac = () => (((dayRaw() + (S.dayOff || 0)) % DAY_LEN) + DAY_LEN) % DAY_LEN / DAY_LEN;
-const isNightAt = (f) => f >= DUSK || f < DAWN;
-function setDayFrac(f) { S.dayOff = ((f * DAY_LEN - dayRaw()) % DAY_LEN + DAY_LEN) % DAY_LEN; }
+const SAVE_KEY = 'yaga-farm-v2';
+const OLD_SAVE_KEY = 'yaga-pet-v1';        // the pet game's save: its dug plots are brought over once
+const DOCK_H = 120;                       // px at the bottom of the screen taken by the hotbar and its hint line
 // the homepage's expressions: lids, brow tilt (upper lid angle), eye scale per mouth
 const FACES = {
   grin:   { up: 0.5,  lo: -0.4,  tilt: 0,    es: 0.86 },
@@ -108,10 +110,9 @@ const FACES = {
   grumpy: { up: 0.12, lo: -0.5,  tilt: 0.42, es: 0.86 },
   snarl:  { up: 0.06, lo: -0.42, tilt: 0.48, es: 0.86 },
 };
-
-/* ───────────── Yaga: the rigged 3D model from the homepage, driven by the same brain ───────────── */
-// The brain talks to the pet through a small interface (pos, heading, startHop, want, touch, poke).
-// Hops become short walks; moods and moments pick one of her 31 animations.
+/* ───────────── Yaga: the rigged 3D model from the homepage, steered by the player ───────────── */
+// Her control (`her`, further down) talks to the model through a small interface (pos, heading, startHop, play, touch).
+// Hops become short walks; what she is doing, and her mood, pick one of her animations.
 const YAGA_H = 2.1;                       // her height in world units
 const MODEL_H = 0.98;                     // model units, feet to hair
 const WALK_PACE = SET.her.walkPace;         // she strolls 30% quicker than the walk clip
@@ -140,15 +141,18 @@ class YagaPet {
     });
     glow(model);
     this.broom = broomGltf.scene; glow(this.broom); attachInHand(model, this.broom);
-    const shovel = makeShovel(); this.shovel = shovel.group; this.mats.push(...shovel.mats);
-    attachInHand(model, this.shovel);
+    // the box-built props: shovel, watering can and the two seed bags
+    const prop = (built) => { this.mats.push(...built.mats); attachInHand(model, built.group); return built.group; };
+    this.shovel = prop(makeShovel()); this.can = prop(makeCan());
+    this.bags = { 'seed:pumpkin': prop(makeSeedBag(0)), 'seed:cabbage': prop(makeSeedBag(1)) };
     this.holds(S.tool);
 
     this.mixer = new THREE.AnimationMixer(model);
     this.clips = Object.fromEntries(gltf.animations.map((c) => [c.name.replace(/\.\d+$/, ''), c]));
     this.clips.swing = this.clips[SWING.clip];      // the broom swing's real name is a long text prompt
     this.action = null; this.clipName = null; this.oneShot = null; this.lastWalk = -9;
-    this.gait = 'walk';                             // kept through the brain's tiny gaps between hops
+    this.gait = 'walk';                             // kept through the tiny gaps between hops
+    this.steer = false;                             // walking under the arrow keys (no hop)
 
     // tap and petting volume, slightly bigger than her
     const s = this.squash.scale.x;
@@ -158,8 +162,7 @@ class YagaPet {
 
     this.heading = 0.3; this.faceTo = null; this.turnRate = 7;
     this.hop = null; this.vel = new THREE.Vector3(); this.prev = new THREE.Vector3();
-    this.st = { puffV: 0 };                         // the brain nudges this spring; she shrugs it off
-    this.want = { up: 0.36, lo: -0.5, flap: 0, face: 'smile', droop: 0.35, puff: 0, look: null, asleep: false, squat: 0, stretch: 0, shake: 0 };
+    this.st = { puffV: 0 };                         // a poke nudges this spring; she shrugs it off
     this.pokeAt = -9; this.startleAt = -9; this.near = 0; this.hover = null;
     this.touch = { on: false, local: new THREE.Vector3(), vel: new THREE.Vector3() };
     this.inv = new THREE.Quaternion();
@@ -169,10 +172,13 @@ class YagaPet {
   get pos() { return this.root.position; }
   get airborne() { return !!this.hop; }
 
-  /** Shows the tool in her hand: the broom and the shovel are both props on her right hand. */
-  holds(tool) { this.broom.visible = tool === 'broom'; this.shovel.visible = tool === 'shovel'; }
+  /** Shows the tool in her hand (all props on her right hand); the hand and the spell leave it empty. */
+  holds(tool) {
+    this.broom.visible = tool === 'broom'; this.shovel.visible = tool === 'shovel'; this.can.visible = tool === 'can';
+    for (const [k, bag] of Object.entries(this.bags)) bag.visible = tool === k;
+  }
 
-  /** The brain's "hop": a short walk to (x, z). A big hop on the spot is a little celebration. */
+  /** A "hop": a short walk to (x, z). A big hop on the spot is a little celebration. */
   startHop(x, z, o = {}) {
     const from = this.root.position.clone();
     const dist = Math.hypot(x - from.x, z - from.z);
@@ -181,39 +187,37 @@ class YagaPet {
       return;
     }
     // one gait for the whole trip, so she never flips between walk and run on the way
-    this.gait = brain.urgent ? 'run' : 'walk';
+    this.gait = her.run ? 'run' : 'walk';
     this.hop = { from, to: new THREE.Vector3(x, 0, z), t: 0, dur: dist / (this.gait === 'run' ? RUN_SPEED : WALK_SPEED) };
     this.faceTo = Math.atan2(x - from.x, z - from.z);
   }
 
-  /** Plays one animation for `secs`, then she goes back to whatever her mood picks. `restart` replays it from the start. */
-  play(name, secs, restart = false) { this.oneShot = { name, until: clock.t + secs }; this.setClip(name, restart); }
+  /** Plays one animation for `secs`, then she goes back to whatever her mood picks. `restart` replays it from the
+   *  start, or from `from` seconds into it. */
+  play(name, secs, restart = false, from = 0) { this.oneShot = { name, until: clock.t + secs }; this.setClip(name, restart, from); }
   /** One broom swing. */
   swing() { this.play('swing', SWING.dur, true); }
 
-  setClip(name, restart = false) {
+  setClip(name, restart = false, from = 0) {
     if (name === this.clipName && !restart) return;
     const clip = this.clips[name] || this.clips.idle;
     const next = this.mixer.clipAction(clip);
     next.reset().setEffectiveWeight(1).setEffectiveTimeScale(name === 'run' ? RUN_PACE : name === 'walk' ? WALK_PACE : 1).fadeIn(restart ? 0.08 : FADE).play();
+    next.time = from;
     if (this.action && this.action !== next) this.action.fadeOut(FADE);
     this.action = next; this.clipName = name;
   }
 
-  /** Her mood picks the animation when nothing else is happening. */
+  /** What she is doing, then her mood, picks the animation when no one-off is playing. */
   moodClip(t, walking) {
     if (walking) return this.gait;
-    const w = this.want;
-    switch (brain.mode) {
-      case 'eat': return 'football_catch';
-      case 'sleep': case 'nap': return w.asleep ? 'depressed' : 'angry_02';
-      case 'react': return t - this.startleAt < 1.2 ? 'hit_to_body_01' : 'greet_01';
+    switch (her.mode) {
+      case 'rest': return 'sit';
+      case 'faint': case 'sleep': return 'depressed';
     }
-    if (this.touch.on || t < brain.contentUntil) return 'agree';
-    if (w.face === 'snarl') return 'angry_03';
+    if (this.touch.on || t < her.contentUntil) return 'agree';
     if (talking()) return 'complain_01';
-    if (S.health < 0.3) return 'frustrated_01';
-    if (w.face === 'oh' && w.look) return 'look_around';
+    if (S.stamina < 0.2) return 'frustrated_01';
     if (t - Talk.inputAt > BORED_AFTER) return BORED_CLIPS[Math.floor((t - Talk.inputAt - BORED_AFTER) / 9) % BORED_CLIPS.length];
     return 'idle';
   }
@@ -237,8 +241,8 @@ class YagaPet {
     if (this.faceTo != null) this.heading += wrap(this.faceTo - this.heading) * (1 - Math.exp(-this.turnRate * 1.6 * dt));
     this.root.rotation.y = this.heading;
 
-    // keep walking through the brain's short pauses between hops
-    const walking = !!this.hop || (brain.mode === 'travel' && t - this.lastWalk < 0.35);
+    // keep walking through the short pauses between hops
+    const walking = !!this.hop || this.steer || (her.mode === 'walk' && t - this.lastWalk < 0.35);
     if (this.oneShot && (t >= this.oneShot.until || walking)) this.oneShot = null;
     if (!this.oneShot) this.setClip(this.moodClip(t, walking));
     this.mixer.update(dt);
@@ -748,50 +752,93 @@ const Sound = {
   night() { [659, 523, 392].forEach((f, i) => this.tone(f, f, 0.4, 0.05, 'sine', i * 0.12)); },
   babble() { const f = rand(330, 640); this.tone(f, f * rand(0.8, 1.3), 0.06, 0.035, 'triangle'); },
   equip() { this.tone(520, 760, 0.06, 0.06, 'square'); this.noise(0.05, 0.05, 2400, 2); },
-  hurt() { this.tone(230, 90, 0.2, 0.12, 'sawtooth'); this.noise(0.1, 0.07, 500, 1); },
   swing() { this.noise(0.2, 0.1, 1300, 1, 0, 1800); },
   cluck() { const f = rand(380, 520); this.tone(f, f * 1.25, 0.05, 0.08, 'square'); this.tone(f * 0.9, f * 1.1, 0.05, 0.07, 'square', 0.09); },
   squawk() { this.tone(900, 500, 0.22, 0.1, 'sawtooth'); this.noise(0.12, 0.06, 2200, 1); },
   hit() { this.tone(190, 60, 0.12, 0.16, 'square'); this.noise(0.06, 0.1, 900, 1); },
+  coin() { [1319, 1760].forEach((f, i) => this.tone(f, f, 0.12, 0.06, 'triangle', i * 0.07)); },
+  pour() { this.noise(0.5, 0.07, 1400, 0.7, 0, 500); },
+  nope() { this.tone(300, 220, 0.12, 0.07, 'triangle'); },
 };
 
 /* ───────────── saved state ───────────── */
+// The tools on the hotbar, in order (keys 1–7). 'seed:<crop>' plants that crop.
+const TOOLS = ['hand', 'shovel', 'can', 'seed:pumpkin', 'seed:cabbage', 'broom', 'spell'];
+const freshStats = () => ({ dug: 0, planted: 0, watered: 0, harvested: 0, sold: 0, earned: 0, eggs: 0, swatted: 0, caught: [] });
 const S = {
-  energy: 0.85, health: 0.9, mana: 0.5, tool: 'broom', night: false, dayOff: null,   // energy is the stamina bar
-  farm: [], flock: FLOCK, sound: true, away: -1,   // farm: her dug plots, [{x, z, crop, at}]; flock: hens alive
+  day: 1, hour: WAKE, stamina: 1, mana: 1, coins: SET.start.coins, tool: 'hand', sound: true, night: false,
+  inv: { ...SET.start.items },      // her bag: { kind: count } (see inventory.js)
+  can: SET.can.holds,               // waterings left in the can
+  up: { bigCan: false, steelShovel: false },
+  plots: [],                        // dug blocks: see farm.js; each also gets a `view` (its drawing) at runtime
+  hens: SET.hens.start, trough: 0,  // trough: scoops of feed in it (one per hen per day)
+  eggs: [],                         // eggs lying in the yard, [{x, z}] (+ `root` at runtime)
+  pests: { due: -1, came: 0 },      // tonight's pests: how many will come (-1: not worked out yet) and how many have
+  goals: [], stats: freshStats(), today: { earned: 0, sold: 0 },
+  away: -1,                         // seconds since the last visit (-1: the first visit)
 };
+const ITEM_OK = (k) => !!CROPS[k] || k === 'egg' || k === 'feed' || (k.startsWith('seed:') && !!CROPS[k.slice(5)]) || (k.startsWith('bug:') && FRIENDLY.includes(k.slice(4)));
+const num = (v, def, lo = -Infinity, hi = Infinity) => (Number.isFinite(v) ? clamp(v, lo, hi) : def);
+const int = (v, def, lo, hi) => Math.floor(num(v, def, lo, hi));
+
 function load() {
-  try { loadSave(); } catch (e) { /* storage unavailable: start fresh */ }
-  if (S.dayOff == null) setDayFrac(S.night ? 22 / 24 : 9 / 24);   // first visit: mid-morning
-  S.night = isNightAt(dayFrac());
+  try { loadSave(); } catch (e) { /* storage unavailable or a broken save: start fresh */ }
+  S.night = isNight(S.hour);
 }
+/** Reads the save field by field, so a missing or odd value falls back to its default instead of breaking the game.
+ *  With no save of its own it brings over what it can from the pet game's save (her dug plots, the sound). */
 function loadSave() {
-  {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    Object.assign(S, { energy: d.energy, health: d.health, mana: d.mana ?? S.mana, tool: d.tool === 'shovel' ? 'shovel' : 'broom', dayOff: d.dayOff ?? null, night: !!d.night, sound: d.sound !== false });
-    S.farm = Array.isArray(d.farm) ? d.farm.slice(0, 300) : [];
-    S.flock = clamp(d.flock ?? FLOCK, 0, FLOCK);
-    const away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 3 * 24 * 3600);
-    S.away = away;
-    S.energy = clamp((S.energy ?? 0.8) + away / SET.her.awayStamina, 0, 1);   // she rests while you're away
-    S.mana = clamp(S.mana + away / SET.her.awayMana, 0, 1);
-    S.health = clamp(S.health ?? 0.9, 0.15, 1);
-  }
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (!raw) return migrate();
+  const d = JSON.parse(raw);
+  S.day = int(d.day, 1, 1); S.hour = num(d.hour, WAKE, WAKE, PASS_OUT - 0.05);
+  S.stamina = num(d.stamina, 1, 0, 1); S.mana = num(d.mana, 1, 0, 1);
+  S.coins = int(d.coins, S.coins, 0); S.tool = TOOLS.includes(d.tool) ? d.tool : 'hand'; S.sound = d.sound !== false;
+  S.inv = {};
+  for (const [k, n] of Object.entries(d.inv || {})) if (ITEM_OK(k) && int(n, 0, 0) > 0) S.inv[k] = int(n, 0, 0);
+  S.up = { bigCan: !!d.up?.bigCan, steelShovel: !!d.up?.steelShovel };
+  S.can = int(d.can, canHolds(S), 0, canHolds(S));
+  S.plots = cleanPlots(d.plots);
+  S.hens = int(d.hens, SET.hens.start, 0, SET.hens.most); S.trough = int(d.trough, 0, 0, SET.hens.most);
+  S.eggs = (Array.isArray(d.eggs) ? d.eggs : []).filter((e) => Number.isFinite(e?.x) && Number.isFinite(e?.z)).slice(0, SET.hens.eggsMost).map(({ x, z }) => ({ x, z }));
+  S.pests = { due: int(d.pests?.due, -1, -1, 99), came: int(d.pests?.came, 0, 0, 99) };
+  S.goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => typeof g === 'string');
+  const st = d.stats || {};
+  S.stats = freshStats();
+  for (const k of Object.keys(S.stats)) if (k !== 'caught') S.stats[k] = int(st[k], 0, 0);
+  S.stats.caught = (Array.isArray(st.caught) ? st.caught : []).filter((k) => FRIENDLY.includes(k));
+  S.today = { earned: int(d.today?.earned, 0, 0), sold: int(d.today?.sold, 0, 0) };
+  S.away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 365 * 86400);
+}
+/** The pet game's save: keeps her dug plots (their crops start again from seed) and the sound setting. */
+function migrate() {
+  const raw = localStorage.getItem(OLD_SAVE_KEY);
+  if (!raw) return;
+  const d = JSON.parse(raw);
+  S.sound = d.sound !== false;
+  S.plots = cleanPlots((Array.isArray(d.farm) ? d.farm : []).map((f) => ({ x: f?.x, z: f?.z, crop: f?.crop })));
+  S.away = clamp((Date.now() - (d.t || Date.now())) / 1000, 0, 365 * 86400);
+}
+function cleanPlots(list) {
+  return (Array.isArray(list) ? list : []).filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.z)).slice(0, 400).map((p) => {
+    const crop = CROPS[p.crop] ? p.crop : null;
+    return { ...newPlot(p.x, p.z, 'dirt'), crop, growth: crop ? int(p.growth, 0, 0, CROPS[crop].days) : 0, watered: !!p.watered, bare: int(p.bare, 0, 0, 99) };
+  });
 }
 function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      energy: S.energy, health: S.health, mana: S.mana, tool: S.tool, night: S.night, dayOff: S.dayOff, sound: Sound.on,
-      farm: world.plots.map((p) => ({ x: p.x, z: p.z, crop: p.crop, at: p.at })), flock: S.flock, t: Date.now(),
+      v: 2, t: Date.now(), day: S.day, hour: S.hour, stamina: S.stamina, mana: S.mana, coins: S.coins, tool: S.tool, sound: Sound.on,
+      inv: S.inv, can: S.can, up: S.up, hens: S.hens, trough: S.trough, pests: S.pests, goals: S.goals, stats: S.stats, today: S.today,
+      plots: S.plots.map(({ x, z, crop, growth, watered, bare }) => ({ x, z, crop, growth, watered, bare })),
+      eggs: S.eggs.map(({ x, z }) => ({ x, z })),
     }));
   } catch (e) { /* ignore */ }
 }
 
 /* ───────────── world ───────────── */
-const world = { items: [], vanishing: [], falling: [], clods: [], plots: [], hens: [], eggs: [], faintUntil: 0 };
-let renderer, scene, camera, viewCam, pet, iconKit, area, view;
+const world = { items: [], vanishing: [], clods: [], hens: [], flying: [] };
+let renderer, scene, camera, viewCam, pet, icons, area, view;
 // Diablo-style isometric camera (45° around, ~35° down) following her across the field; scrolling zooms (camera-rig.js).
 // Fog distances (DAY.fog, NIGHT.fog) count from her, not from the camera.
 const aim = new THREE.Vector3(2.3, rigAt(0, 1).aimY, 0), look = new THREE.Vector3();
@@ -838,7 +885,8 @@ async function boot() {
     getJSON('./words/en.json'),
     getJSON('./assets/models/box/box.json'),
     getJSON('./assets/models/environment/house.json'),
-    loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel']),   // these three keep what they load in their own modules
+    loadBoxModels(['animals/hen', 'animals/egg', 'plants/pumpkin', 'plants/cabbage', 'tools/shovel', 'tools/watering-can', 'tools/seed-bag',
+      'farm/stall', 'farm/well', 'farm/trough']),   // these three keep what they load in their own modules
     loadBlocks(),
     loadBugLooks(),
   ]);
@@ -848,7 +896,6 @@ async function boot() {
 
   loadWorld(worldJson, SPAWN);
   world.terrain = terrainMeshes(); scene.add(world.terrain.group);
-  for (const f of S.farm) addPlot(f.x, f.z, f.crop, f.at);          // the plots she dug before
 
   const env = envGltf.scene; dress(env);
   env.position.set(0.1, 0, -1.7);
@@ -857,11 +904,13 @@ async function boot() {
   const tree = shrinkTree(env);
   buildScenery(env, tree);
   buildHouse(houseLook);
+  buildFarmProps();
   buildDayNight(env);
   buildMountains(env);
+  restorePlots();                                                     // the plots she dug before
 
   world.models = {};
-  for (const id of FOODS) world.models[id] = { make: () => makeBug(THREE, id) };
+  for (const id of BUG_KINDS) world.models[id] = { make: () => makeBug(THREE, id) };
 
   pet = new YagaPet(yaga, broom);
   pet.root.position.set(SPAWN.x, groundY(SPAWN.x, SPAWN.z), SPAWN.z);
@@ -870,28 +919,32 @@ async function boot() {
   Box.pet.root.position.set(1.9, groundY(1.9, 1.9), 1.9);
   scene.add(Box.pet.root);
 
-  marker(); makeCellMark();
-  iconKit = makeIcons();
+  marker(); makeCellMarks();
+  icons = makeIcons(broom.scene);
+  initHud(UI, (k) => icons[k], itemName);
   bindUI();
   resize();
   new ResizeObserver(resize).observe(stage);
   addEventListener('resize', resize);
 
-  for (let i = 0; i < S.flock; i++) addHen(i);
+  syncHens();
+  for (const e of S.eggs) showEgg(e);
   phase.n = S.night ? 1 : 0; applyPhase(phase.n);
-  world.spawnAt = rand(4, 8); world.foeAt = rand(8, 14);
+  world.spawnAt = rand(4, 8); world.pestAt = rand(3, 6);
   for (let i = 0; i < 4; i++) spawnSprout(true);
   refreshUI();
   Talk.boot = S.away < 0 ? LINES.first[0] : S.away > 120 ? drawLine('away').replace('{n}', fmtAway(S.away)) : drawLine('hello');
 
-  window.yaga = { S, brain, world, Box, get pet() { return pet; }, dropFood, poke, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre, tillCell, tapShovel, canDig, get cellMark() { return cellMark; }, setTool, spawnHostile, hurtYaga, hostileBugs, tapFoe, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
+  window.yaga = { S, her, world, Box, get pet() { return pet; }, camera, advance, clock, say, Talk, go, groundY, walkable, resolveSpot, waypoint, kindAt, blockCentre,
+    canDig, plotAt, planFor, command, setTool, spawnPest, pests, setHour, sleep: () => startSleep(false), wake: closePanel, panelOpen, stall: () => openStall(S, STALL_EVENTS),
+    get cellMark() { return cellMark; }, setZoom: (v) => { zoom = zoomTarget = v; }, get zoom() { return zoom; } };
   start();
   setInterval(save, 4000);
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { save(); Talk.hiddenAt = Date.now(); return; }
     const s = Talk.hiddenAt ? (Date.now() - Talk.hiddenAt) / 1000 : 0; Talk.hiddenAt = 0;
-    if (s > 8 && brain.mode !== 'sleep') say('tab', { force: true, map: (l) => l.replace('{n}', String(Math.round(s))) });
+    if (s > 8 && her.mode !== 'sleep') say('tab', { force: true, map: (l) => l.replace('{n}', String(Math.round(s))) });
   });
 }
 
@@ -1149,10 +1202,6 @@ function setHouseLight(n, lit) {
   H.glow.intensity = 6 * lit;
 }
 
-function hitHouse() { return world.house ? ray.intersectObject(world.house.root, true).length > 0 : false; }
-/** Sends her home: a visit, or (nap) to sleep it off at her door. */
-function goHome(nap = false) { go(new THREE.Vector3(HOUSE_DOOR.x, 0, HOUSE_DOOR.z), nap ? 'homeNap' : 'home', false); }
-
 /* ───────────── roaming area (what the camera shows) ───────────── */
 /** The walkable field: a plain rectangle, independent of the camera. */
 function computeArea() {
@@ -1244,13 +1293,41 @@ function followCamera(k) {
   if (!world.viewAt || world.viewAt.distanceTo(aim) > 0.6) computeView();
 }
 
-/* ───────────── props: the bugs ───────────── */
+/* ───────────── her farm: the market stall, the well and the hens' trough ───────────── */
+// Where each stands (its model faces +z, towards the camera side), how much room it takes (r), and where she
+// stands to use it (`use`, worked out in buildFarmProps).
+const STALL = { x: -0.6, z: -1.9, r: 0.95 };
+const WELL = { x: -1.3, z: 2.9, r: 0.55 };
+const TROUGH = { x: -6.6, z: 0.8, r: 0.6 };
+function buildFarmProps() {
+  const place = (name, at, kind) => {
+    const m = buildBoxModel(name), g = m.group;
+    g.position.set(at.x, groundY(at.x, at.z), at.z); scene.add(g);
+    g.traverse((o) => { o.userData.pick = { kind }; });
+    OBSTACLES.push({ x: at.x, z: at.z, r: at.r + BODY_R });
+    at.use = resolveSpot(at.x, at.z + at.r + BODY_R + 0.15);
+    return m;
+  };
+  world.stall = place('farm/stall', STALL, 'stall');
+  world.well = place('farm/well', WELL, 'well');
+  world.trough = place('farm/trough', TROUGH, 'trough');
+  world.house.root.traverse((o) => { o.userData.pick = { kind: 'house' }; });
+  showTrough();
+}
+/** The trough shows its grain, higher the more scoops are in it. */
+function showTrough() {
+  const g = world.trough.parts.grain, k = S.trough / Math.max(1, S.hens);
+  g.visible = S.trough > 0; g.scale.y = 0.35 + 0.65 * Math.min(1, k);
+}
+const shopOpen = () => S.hour >= SET.shop.opens && S.hour < SET.shop.closes;
+
+/* ───────────── friendly bugs: they wander the clearing; catch them with your hand and sell them ───────────── */
 const TAP_GEO = new THREE.SphereGeometry(1, 12, 8), TAP_MAT = new THREE.MeshBasicMaterial({ visible: false });
 function cloneProp(kind) {
   const bug = world.models[kind].make(), root = new THREE.Group(); root.name = kind; root.add(bug.group); root.scale.setScalar(BUG_S);
   const tap = new THREE.Mesh(TAP_GEO, TAP_MAT); tap.scale.setScalar(BUG_TAP_R / BUG_S); tap.position.y = 0.1; root.add(tap);
-  const it = { root, kind, s0: root.scale.x, grow: 0, state: 'rest', bug, seed: rand(0, 50) };
-  root.traverse((o) => { o.userData.item = it; });
+  const it = { root, kind, s0: root.scale.x, grow: 0, bug, seed: rand(0, 50) };
+  root.traverse((o) => { o.userData.pick = { kind: 'bug', ref: it }; });
   return it;
 }
 function clearOfItems(x, z, gap = 1.3) {
@@ -1258,11 +1335,13 @@ function clearOfItems(x, z, gap = 1.3) {
     && Math.hypot(x - pet.pos.x, z - pet.pos.z) > BODY_R + 0.5;
 }
 const BUG_MAX = SET.bugs.most;
-/** The bugs she can hunt and eat: hostile ones are enemies, not food. */
-function aliveBugs(kind) { return world.items.filter((i) => i.bug && !i.hostile && (!kind || i.kind === kind)); }
+/** The friendly bugs out there (of one kind, if given). */
+function aliveBugs(kind) { return world.items.filter((i) => !i.pest && (!kind || i.kind === kind)); }
+/** Which bug comes next: fireflies only after dark, and the kinds there are fewest of more often. */
 function spawnKind() {
-  const n = (k) => aliveBugs(k).length, min = Math.min(...FOODS.map(n));
-  return Math.random() < 0.5 ? pick(FOODS.filter((k) => n(k) === min)) : pick(FOODS);   // keep the menu varied
+  const kinds = FRIENDLY.filter((k) => k !== 'firefly' || S.night);
+  const n = (k) => aliveBugs(k).length, min = Math.min(...kinds.map(n));
+  return Math.random() < 0.5 ? pick(kinds.filter((k) => n(k) === min)) : pick(kinds);
 }
 function spawnSprout(instant = false, kind = null) {
   const A = view || area || ROAM;
@@ -1274,47 +1353,17 @@ function spawnSprout(instant = false, kind = null) {
     const x = cross ? (side < 0 ? sp.x0 + 0.5 : sp.x1 - 0.5) : rand(sp.x0 + 0.9, sp.x1 - 0.9);
     if (blocked(x, z, 0.5) || !clearOfItems(x, z, 2.0) || Math.hypot(x - pet.pos.x, z - pet.pos.z) < 2.4) continue;
     const it = cloneProp(kind || spawnKind());
-    it.given = false;
     it.root.position.set(x, groundY(x, z) + (instant ? 0 : -0.3), z); it.root.rotation.y = cross ? (side < 0 ? Math.PI / 2 : -Math.PI / 2) : rand(0, Math.PI * 2);
-    if (it.bug) { startWalk(it, cross ? -side : null); it.life = rand(...SET.bugs.stayFor); }
+    startWalk(it, cross ? -side : null); it.life = rand(...SET.bugs.stayFor);
     it.s0 *= rand(0.9, 1.15); it.grow = instant ? 1 : 0; it.root.scale.setScalar(instant ? it.s0 : 0.001);
     scene.add(it.root); world.items.push(it);
     return it;
   }
   return null;
 }
-function landingSpot() {
-  // the fruit lands in front of the tree, leaning toward the side the box is on
-  const toCam = Math.atan2(camera.position.z - TREE.z, camera.position.x - TREE.x);
-  const toPet = Math.atan2(pet.pos.z - TREE.z, pet.pos.x - TREE.x);
-  const a0 = toCam + clamp(wrap(toPet - toCam), -0.9, 0.9);
-  for (let i = 0; i < 40; i++) {
-    const a = a0 + rand(-0.5, 0.5) * (1 + i / 20), r = rand(2.3, 3.1);
-    const s = resolveSpot(TREE.x + Math.cos(a) * r, TREE.z + Math.sin(a) * r);
-    if (!blocked(s.x, s.z, 0.45) && clearOfItems(s.x, s.z, 1.3)) return s;
-  }
-  return resolveSpot(pet.pos.x + 1.6, pet.pos.z + 0.6);
-}
-function dropFood(kind) {
-  if (world.items.filter((i) => i.given).length >= 6) {
-    const old = world.items.find((i) => i.given && !i.claimed);
-    if (old) vanish(old, 0);
-  }
-  const it = cloneProp(kind);
-  it.given = true; it.state = 'fall';
-  const land = landingSpot();
-  const start = new THREE.Vector3(CANOPY.x + rand(-0.8, 0.8), CANOPY.y - 0.2, CANOPY.z + rand(-0.3, 0.5));
-  const T = Math.sqrt((2 * (start.y - groundY(land.x, land.z))) / 16);
-  it.fall = { vx: (land.x - start.x) / T, vz: (land.z - start.z) / T, vy: 0, bounces: 0, spin: rand(-8, 8) };
-  it.root.position.copy(start); it.root.scale.setScalar(it.s0); it.grow = 1;
-  scene.add(it.root); world.items.push(it);
-  Sound.drop();
-  brain.noticed = it; brain.noticeAt = clock.t;
-  return it;
-}
 /** A bug left far behind wanders off, so there are always some near her. */
 function recycleFarBug() {
-  const far = aliveBugs().filter((i) => !i.claimed && i.root.position.distanceTo(pet.pos) > 16)
+  const far = aliveBugs().filter((i) => i !== her.order?.ref && i.root.position.distanceTo(pet.pos) > 16)
     .sort((a, b) => b.root.position.distanceTo(pet.pos) - a.root.position.distanceTo(pet.pos))[0];
   if (far) vanish(far);
 }
@@ -1323,7 +1372,6 @@ function vanish(it, delay = 0, lift = 1.1) {
   world.vanishing.push({ it, t: -delay, dur: 0.35, lift });
 }
 // bugs walk the clearing: each kind its own pace, each bug a bit faster or slower than its kind.
-// All of them stay well under the box's full chase (~2.8 units/s), even when they bolt.
 const BUG_SPEED = Object.fromEntries(Object.entries(SET.bugs.speed).map(([k, v]) => [k, v * BUG_SIZE]));   // smaller bugs, shorter strides
 const BUG_BOLT = SET.bugs.boltSpeed, BUG_FEAR = SET.bugs.fearRange;
 function bugTarget(it, exit = null) {
@@ -1337,142 +1385,112 @@ function bugTarget(it, exit = null) {
   }
   return new THREE.Vector3(p.x, 0, p.z);
 }
-/* ───────────── the monsters: big red bugs. They wander calmly until she hits one; then it turns on her and bites.
-   (hostile.aggressive in settings.js makes them hunt the hens and her on their own.) ───────────── */
-const HOSTILE = { ...SET.hostile, reach: BODY_R + 0.15 };
-const hostileBugs = () => world.items.filter((i) => i.hostile);
-const FOE_RED = new THREE.Color(0xB32A1F);
-/** The monster turns angry: it chases her at its own speed and bites. */
-function anger(it) {
-  it.angry = true; it.walk.base = HOSTILE.speed;
+
+/* ───────────── pests: big red beetles and ants that come out at night for crops that are dry or ripe ───────────── */
+// Each night brings pestsDue() of them (day.js), one every few seconds while it is dark. A pest crawls to a crop at
+// risk and eats it unless she swats it first with the broom; a watered, growing crop is safe. They never bite her.
+const PEST = SET.pests;
+const pests = () => world.items.filter((i) => i.pest && !i.leaving);
+const PEST_RED = new THREE.Color(0xB32A1F);
+/** A crop at risk for a pest at (x, z) to go for: the nearest one, or null. */
+function preyFor(x, z) {
+  let best = null, bestD = Infinity;
+  for (const p of S.plots) { const d = Math.hypot(p.x - x, p.z - z); if (atRisk(p) && d < bestD) { best = p; bestD = d; } }
+  return best;
 }
-/** A bug that crawls out of the dirt, bigger and red-glowing. Calm and wandering, or angry from the start in aggressive mode. */
-function spawnHostile(kind = pick(HOSTILE.kinds)) {
-  const it = spawnSprout(false, kind);
-  if (!it) return null;
-  Object.assign(it, { hostile: true, hp: HOSTILE.hp, biteAt: 1, life: rand(...HOSTILE.stayFor), stun: 0, flash: 0, glow: [] });
-  it.s0 *= HOSTILE.size; it.walk.exit = null; it.walk.goal = bugTarget(it);
+/** A pest crawls in out of the dark, 6–9 m from a crop at risk. */
+function spawnPest(kind = pick(PEST_KINDS)) {
+  const prey = pick(S.plots.filter(atRisk));
+  if (!prey) return null;
+  let at = null;
+  for (let i = 0; i < 40 && !at; i++) {
+    const a = rand(0, Math.PI * 2), r = rand(6, 9), x = prey.x + Math.cos(a) * r, z = prey.z + Math.sin(a) * r;
+    if (x > ROAM.x0 && x < ROAM.x1 && z > ROAM.z0 && z < ROAM.z1 && !blocked(x, z, 0.4)) at = { x, z };
+  }
+  if (!at) return null;
+  const it = cloneProp(kind);
+  Object.assign(it, { pest: true, prey, hp: PEST.hp, stun: 0, flash: 0, eatT: 0, glow: [] });
   it.root.traverse((o) => {                             // its own materials, so the red glow stays on this bug
     if (!o.isMesh || !o.material.emissive) return;
-    o.material = o.material.clone(); o.material.emissive = FOE_RED.clone(); o.material.emissiveIntensity = 0.6;
+    o.material = o.material.clone(); o.material.emissive = PEST_RED.clone(); o.material.emissiveIntensity = 0.6;
     it.glow.push(o.material);
   });
-  if (HOSTILE.aggressive) { anger(it); say('foe', { cool: 25 }); } else say('foeCalm', { cool: 25 });
+  it.s0 *= PEST.size * rand(0.92, 1.08); it.grow = 0; it.root.scale.setScalar(0.001);
+  it.root.position.set(at.x, groundY(at.x, at.z) - 0.3, at.z);
+  startWalk(it); it.walk.base = PEST.speed;
+  scene.add(it.root); world.items.push(it);
+  S.pests.came++;
+  say('pest', { cool: 18 }); boxReact('pest', 0.4);
   return it;
 }
-/** What an angry monster goes for: her. In aggressive mode the nearest hen, unless she is right beside it; her once the flock is gone. */
-function foeTarget(it) {
-  const p = it.root.position;
-  let hen = null, best = Infinity;
-  for (const h of HOSTILE.aggressive ? world.hens : []) { const d = Math.hypot(h.root.position.x - p.x, h.root.position.z - p.z); if (d < best) { best = d; hen = h; } }
-  if (hen && Math.hypot(pet.pos.x - p.x, pet.pos.z - p.z) > HOSTILE.herRange) return { x: hen.root.position.x, z: hen.root.position.z, reach: HOSTILE.henReach, hen };
-  return { x: pet.pos.x, z: pet.pos.z, reach: HOSTILE.reach };
+/** At night the pests come, one every few seconds, until tonight's number have. */
+function tickPestSpawns(dt) {
+  if (!S.night || paused()) return;
+  if (S.pests.due < 0) S.pests.due = pestsDue(S);
+  if ((world.pestAt -= dt) > 0) return;
+  world.pestAt = rand(...PEST.every);
+  if (S.pests.came < S.pests.due) spawnPest();
 }
-/** A hostile bug gives up and crawls off the edge of the field. */
-function sendOff(it) {
-  const p = it.root.position, sp = spanAt(p.z);
-  it.hostile = it.angry = false; it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
+/** Where a pest is going: its crop, while that is still at risk (otherwise the nearest other one, or away). */
+function pestGoal(it) {
+  if (!S.plots.includes(it.prey) || !atRisk(it.prey)) {
+    it.prey = preyFor(it.root.position.x, it.root.position.z); it.eatT = 0;
+    if (!it.prey) { sendOff(it); return null; }
+  }
+  return it.prey;
 }
-/** An angry monster next to its target bites, every so often. A fresh hit stuns it and flashes it white for a moment; a calm one only gets the flash. */
-function tickBite(it, dt) {
+/** A pest at its crop eats; after PEST.eatFor seconds the crop is gone and the pest crawls off, full. */
+function tickPestEat(it, dt) {
   it.stun = Math.max(0, it.stun - dt);
   if (it.flash > 0) { it.flash -= dt; for (const m of it.glow) m.emissiveIntensity = it.flash > 0 ? 2.2 : 0.6; }
-  if (!it.angry) return;
-  it.biteAt -= dt;
-  if (it.biteAt > 0 || it.stun > 0 || it.state !== 'rest' || it.grow < 1) return;
-  const p = it.root.position, tgt = foeTarget(it);
-  if (Math.hypot(p.x - tgt.x, p.z - tgt.z) > tgt.reach + 0.1) return;
-  if (!tgt.hen && clock.t < world.faintUntil) return;      // nobody bites her while she is down
-  it.biteAt = HOSTILE.biteEvery;
-  if (tgt.hen) hurtHen(tgt.hen, HOSTILE.biteHen, p); else hurtYaga(HOSTILE.bite);
+  const p = it.prey;
+  if (it.leaving || !p || it.stun > 0 || paused()) return;
+  if (Math.hypot(it.root.position.x - p.x, it.root.position.z - p.z) > 0.4) { it.eatT = 0; return; }
+  it.eatT += dt;
+  if (it.eatT < PEST.eatFor) return;
+  const crop = p.crop;
+  p.crop = null; p.growth = 0; drawPlot(p);
+  dirtBurst(p.x, p.z, 5); Sound.grumble();
+  say('pestAte', { force: true, map: (l) => l.replace('{crop}', itemName(crop)) });
+  sendOff(it);
 }
-const FEATHER_GEO = new THREE.BoxGeometry(0.08, 0.01, 0.04), FEATHER_MAT = new THREE.MeshStandardMaterial({ color: 0xF0EADC, roughness: 1 });
-/** A bug bit a hen: it squawks and runs from it; at zero health it is lost in a puff of feathers. */
-function hurtHen(h, dmg, from) {
-  h.hp -= dmg; h.hurt = 0.3; h.flee = 1.1; h.away = { x: from.x, z: from.z }; Sound.squawk();
-  if (h.hp <= 0) return loseHen(h);
-  say('henHurt', { cool: 6 });
+/** A pest gives up (or has eaten) and crawls off the edge of the field. */
+function sendOff(it) {
+  const p = it.root.position, sp = spanAt(p.z);
+  it.leaving = true; it.prey = null; it.walk.base = PEST.speed * 1.3;
+  it.walk.exit = p.x < (sp.x0 + sp.x1) / 2 ? -1 : 1; it.walk.goal = bugTarget(it, it.walk.exit);
 }
-function loseHen(h) {
-  const p = h.root.position;
-  for (let i = 0; i < 10; i++) {
-    const m = new THREE.Mesh(FEATHER_GEO, FEATHER_MAT); m.position.set(p.x, p.y + 0.3, p.z); scene.add(m);
-    world.clods.push({ m, v: new THREE.Vector3(rand(-1.2, 1.2), rand(1.5, 3), rand(-1.2, 1.2)), spin: rand(-14, 14), dead: 0, floor: p.y + 0.02 });
-  }
-  scene.remove(h.root); world.hens = world.hens.filter((o) => o !== h);
-  S.flock = world.hens.length; say('henLost', { force: true }); save();
-}
-/** Hens that were lost come back with the morning. */
-function restoreFlock() {
-  if (world.hens.length >= FLOCK) return;
-  while (world.hens.length < FLOCK) addHen(world.hens.length);
-  S.flock = FLOCK; say('henBack', { force: true }); save();
-}
-const vignette = $('.vignette');
-/** Something hurt her: health drops, the screen edge flashes red, and she flinches if she is just standing there. */
-function hurtYaga(dmg) {
-  S.health = clamp(S.health - dmg, 0, 1);
-  Sound.hurt(); say('bitten', { cool: 6 });
-  vignette.classList.remove('hurt'); void vignette.offsetWidth; vignette.classList.add('hurt');
-  if (S.health <= 0.001) return faint();
-  if (brain.mode === 'nap') { brain.mode = 'idle'; brain.until = 1; }          // a bite wakes her
-  if (brain.mode === 'idle' && !pet.airborne) pet.play('hit_to_body_01', 0.9);
-}
-/** At zero health she collapses for a while; the biters give up and crawl off. */
-function faint() {
-  world.faintUntil = clock.t + HOSTILE.faintFor;
-  hostileBugs().forEach(sendOff);
-  if (brain.food) brain.food.claimed = false;
-  brain.food = brain.foe = null;
-  brain.mode = 'nap'; brain.napUntil = clock.t + HOSTILE.faintFor; S.health = HOSTILE.faintHealth;
-  pet.play('fall', 3); say('faint', { force: true });
-}
-
-/* ── the broom ── */
-/** Tap on a hostile bug: with the broom she walks up and swats it; with the shovel she says so. */
-function tapFoe(f) {
-  if (S.tool !== 'broom') { say('wrongTool', { cool: 6 }); return; }
-  if (S.energy < SWING.cost) { say('tired', { cool: 5 }); return; }
-  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
-  ring(f.root.position);
-  brain.foe = f; go(f.root.position.clone(), 'attack', true);
-}
-/** One swing at a bug in reach: it costs stamina, and the hit lands a moment into the swing. */
-function startAttack(f) {
-  brain.mode = 'attack'; brain.foe = f; brain.atkT = 0; brain.atkHit = false;
-  S.energy = clamp(S.energy - SWING.cost, 0, 1);
-  pet.faceTo = Math.atan2(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z);
-  pet.swing(); Sound.swing();
-}
-/** The broom lands: damage, a shove away from her, a white flash, and a stun so it cannot bite straight back. */
+/** The broom lands: damage, a shove away from her, a white flash, and a stun. Two hits and it is gone. */
 function strike(f) {
   const p = f.root.position, dx = p.x - pet.pos.x, dz = p.z - pet.pos.z, d = Math.hypot(dx, dz) || 1e-3;
-  if (d > SWING.reach + 0.3) return;                     // it got away
-  f.hp -= SWING.dmg; f.stun = HOSTILE.stun; f.flash = 0.12; Sound.hit();
+  if (d > SWING.reach + 0.3) return false;               // it got away
+  f.hp -= SWING.dmg; f.stun = PEST.stun; f.flash = 0.12; f.eatT = 0; Sound.hit();
   const s = resolveSpot(p.x + (dx / d) * 0.45, p.z + (dz / d) * 0.45); p.x = s.x; p.z = s.z;
-  if (f.hp <= 0) killFoe(f);
-  else if (!f.angry) { anger(f); say('foeAngry', { cool: 8 }); }      // she hit it, so it hits back
+  if (f.hp <= 0) swatted(f);
+  return true;
 }
-function killFoe(f) {
+function swatted(f) {
   const s = screenOf(f.root.position.clone().setY(f.root.position.y + 0.3));
   vanish(f, 0, 0.5); sparkle(s.x, s.y); Sound.squeak(); Sound.poof();
-  S.mana = clamp(S.mana + HOSTILE.killMana, 0, 1); say('foeDown', { cool: 5 });
+  S.mana = clamp(S.mana + SET.mana.perSwat, 0, 1); S.stats.swatted++;
+  say('swat', { cool: 5 });
+  checkGoals();
 }
 
-/* ───────────── the hens: her flock, wandering in the yard in front of the hut ───────────── */
+/* ───────────── the hens: they wander the yard beside the hut; fed hens lay an egg each morning ───────────── */
 const YARD = SET.hens.yard;
-const HEN = { speed: SET.hens.speed, run: SET.hens.runSpeed };
-const EGG = { every: SET.hens.eggEvery, max: SET.hens.eggsMost };            // seconds between a hen's eggs; the most eggs lying about
 /** A hen at a random spot in the yard. */
 function addHen(variant) {
   const model = makeChicken(variant), a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * YARD.r;
   const s = resolveSpot(YARD.x + Math.cos(a) * r, YARD.z + Math.sin(a) * r);
   model.group.position.set(s.x, groundY(s.x, s.z), s.z);
-  const hen = { model, root: model.group, hp: 1, heading: rand(0, Math.PI * 2), v: 0, goal: null, rest: rand(0.3, 2), t: rand(0, 20), hurt: 0, flee: 0, away: null, eggAt: rand(...EGG.every) };
-  model.group.traverse((o) => { o.userData.hen = hen; });
+  const hen = { model, root: model.group, heading: rand(0, Math.PI * 2), v: 0, goal: null, rest: rand(0.3, 2), t: rand(0, 20) };
+  model.group.traverse((o) => { o.userData.pick = { kind: 'hen', ref: hen }; });
   scene.add(model.group); world.hens.push(hen);
   return hen;
 }
+/** As many hens in the yard as she keeps. */
+function syncHens() { while (world.hens.length < S.hens) addHen(world.hens.length); }
 /** Somewhere for a hen to stroll to: a free spot in the yard. */
 function henGoal() {
   for (let i = 0; i < 12; i++) {
@@ -1481,230 +1499,146 @@ function henGoal() {
   }
   return { x: YARD.x, z: YARD.z };
 }
-/** A hen stands about pecking, then strolls somewhere else; if something bit it, it runs from it. */
+/** A hen stands about pecking, then strolls somewhere else. */
 function tickHen(h, dt) {
   const p = h.root.position;
-  h.t += dt; h.hurt = Math.max(0, h.hurt - dt); h.hp = Math.min(1, h.hp + dt / SET.hens.healIn);    // a bitten hen recovers in a couple of minutes
+  h.t += dt;
   let speed = 0, peck = 0;
-  h.eggAt -= dt;
-  if (h.flee > 0) {
-    h.flee -= dt; speed = HEN.run;
-    h.heading += wrap(Math.atan2(p.x - h.away.x, p.z - h.away.z) - h.heading) * (1 - Math.exp(-12 * dt));
-  } else if (h.rest > 0) {
+  if (h.rest > 0) {
     h.rest -= dt; peck = 0.5 + 0.5 * Math.sin(h.t * 7);
-    if (h.eggAt <= 0) layEgg(h);
     if (h.rest <= 0) h.goal = henGoal();
   } else {
     const dx = h.goal.x - p.x, dz = h.goal.z - p.z;
     if (Math.hypot(dx, dz) < 0.15) h.rest = rand(1.5, 5);
-    else { h.heading += wrap(Math.atan2(dx, dz) - h.heading) * (1 - Math.exp(-6 * dt)); speed = HEN.speed; }
+    else { h.heading += wrap(Math.atan2(dx, dz) - h.heading) * (1 - Math.exp(-6 * dt)); speed = SET.hens.speed; }
   }
   h.v = ease(h.v, speed, 6, dt);
   const nx = p.x + Math.sin(h.heading) * h.v * dt, nz = p.z + Math.cos(h.heading) * h.v * dt;
   if (!blocked(nx, nz, 0.15)) { p.x = nx; p.z = nz; }
-  else { h.v = 0; h.goal = henGoal(); if (h.flee <= 0) h.rest = 0.5; }     // walked into something: think again
+  else { h.v = 0; h.goal = henGoal(); h.rest = 0.5; }     // walked into something: think again
   p.y = ease(p.y, groundY(p.x, p.z), 12, dt); h.root.rotation.y = h.heading;
-  h.model.tick(h.t, h.v / HEN.speed, peck, h.hurt > 0);
+  h.model.tick(h.t, h.v / SET.hens.speed, peck, false);
 }
 function tickHens(dt) { for (const h of world.hens) tickHen(h, dt); }
-/** A hen that is standing about lays an egg behind it. */
-function layEgg(h) {
-  h.eggAt = rand(...EGG.every);
-  if (world.eggs.length >= EGG.max) return;
-  const p = h.root.position, x = p.x - Math.sin(h.heading) * 0.22, z = p.z - Math.cos(h.heading) * 0.22;
-  const root = makeEgg(); root.position.set(x, groundY(x, z), z);
+/** Draws an egg lying in the yard; `e` is its saved {x, z}. */
+function showEgg(e) {
+  const root = e.root = makeEgg(); root.position.set(e.x, groundY(e.x, e.z), e.z);
   const tap = new THREE.Mesh(TAP_GEO, TAP_MAT); tap.scale.setScalar(0.28); tap.position.y = 0.1; root.add(tap);   // a roomy tap target for a small egg
-  const egg = { root, x, z };
-  root.traverse((o) => { o.userData.egg = egg; });
-  scene.add(root); world.eggs.push(egg); Sound.plop();
+  root.traverse((o) => { o.userData.pick = { kind: 'egg', ref: e }; });
+  scene.add(root);
 }
-/** The angry monster she should deal with: one in broom reach, or one at a hen near enough to run to. */
-function foeToDefend() {
-  let best = null, bestD = Infinity;
-  for (const f of hostileBugs().filter((m) => m.angry)) {
-    const fp = f.root.position, d = Math.hypot(fp.x - pet.pos.x, fp.z - pet.pos.z);
-    const atHen = world.hens.some((h) => Math.hypot(h.root.position.x - fp.x, h.root.position.z - fp.z) < 3);
-    if (f.grow >= 1 && d < bestD && (d < SWING.reach || (atHen && d < 9))) { best = f; bestD = d; }
+/** The morning's eggs: each beside a hen, or somewhere in the yard. */
+function layEggs(n) {
+  for (let i = 0; i < n && S.eggs.length < SET.hens.eggsMost; i++) {
+    const h = world.hens[i % Math.max(1, world.hens.length)];
+    const c = h ? h.root.position : henGoal(), a = rand(0, Math.PI * 2);
+    const s = resolveSpot(c.x + Math.cos(a) * 0.35, c.z + Math.sin(a) * 0.35);
+    const e = { x: s.x, z: s.z }; S.eggs.push(e); showEgg(e);
   }
-  return best;
-}
-/** The hen under the tap ray, if any. */
-function hitHen() {
-  const hits = ray.intersectObjects(world.hens.map((h) => h.root), true);
-  return hits.length ? hits[0].object.userData.hen : null;
-}
-/** Tap on a hen: it clucks and she gets a heart. */
-function petHen(h) {
-  Sound.cluck(); h.rest = Math.max(h.rest, 1.2);
-  const s = screenOf(h.root.position.clone().setY(h.root.position.y + 0.5)); heart(s.x, s.y);
-  say('henPet', { cool: 12 });
-}
-/** The egg under the tap ray, if any. */
-function hitEgg() {
-  const hits = ray.intersectObjects(world.eggs.map((e) => e.root), true);
-  return hits.length ? hits[0].object.userData.egg : null;
-}
-/** Tap on an egg: she goes and picks it up. */
-function tapEgg(egg) {
-  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
-  ring(new THREE.Vector3(egg.x, groundY(egg.x, egg.z), egg.z));
-  orderFarm('egg', egg, { egg });
-}
-/** A harvest feeds the flock: the hens heal and lay sooner. */
-function feedFlock() {
-  for (const h of world.hens) { h.hp = Math.min(1, h.hp + SET.hens.feedHeals); h.eggAt = Math.min(h.eggAt, SET.hens.feedLaysWithin); sparkleAt(h.root.position.x, h.root.position.z); }
 }
 
-/* ───────────── the farm: the shovel digs farmland ───────────── */
+/* ───────────── the field: plots she digs, plants, waters and harvests (the rules are in farm.js) ───────────── */
 const FARMABLE = ['dirt', 'grass', 'field'];
-/** Can this block become farmland? Plain dry ground, not hugging the hut, the tree or the rocks. */
+/** Can this block become farmland? Plain dry ground, not hugging the hut, the stall, the tree or the rocks. */
 function canDig(x, z) {
   return FARMABLE.includes(kindAt(x, z)) && walkable(x, z) && !OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r - BODY_R + 0.7);
 }
-const plotAt = (x, z) => { const c = blockCentre(x, z); return world.plots.find((p) => p.x === c.x && p.z === c.z); };
-/** Turns a block into farmland and remembers it. */
-function addPlot(x, z, crop = null, at = 0) {
-  tillCell(x, z);
-  const plot = { x, z, crop, at, stage: -1, root: null };
-  world.plots.push(plot);
-  showCrop(plot);
-  return plot;
+const plotAt = (x, z) => { const c = blockCentre(x, z); return S.plots.find((p) => p.x === c.x && p.z === c.z); };
+/** The saved plots, back on the map; one that no longer sits on diggable ground (the map or the farm moved) is dropped. */
+function restorePlots() {
+  const seen = new Set();
+  S.plots = S.plots.filter((p) => {
+    const c = blockCentre(p.x, p.z), key = `${c.x},${c.z}`;
+    if (seen.has(key) || !canDig(c.x, c.z)) return false;
+    seen.add(key); p.x = c.x; p.z = c.z; p.was = kindAt(c.x, c.z);
+    return true;
+  });
+  S.plots.forEach(drawPlot);
 }
-/** Draws a plot's crop at its current growth stage; a stage that just grew pops up from small. */
-function showCrop(plot) {
-  const stage = plot.crop ? stageOf(plot) : -1;
-  if (plot.stage === stage) return;
-  const grew = plot.stage >= 0 && stage > plot.stage;
-  plot.stage = stage;
-  if (plot.root) scene.remove(plot.root);
-  plot.root = null;
-  if (!plot.crop) return;
-  const root = plot.root = makeCrop(plot.crop, stage);
-  root.position.set(plot.x, groundY(plot.x, plot.z), plot.z);
-  root.traverse((o) => { o.userData.plot = plot; });
-  if (grew) root.scale.setScalar(0.4);
+/** Draws a plot: dug soil (dark while it is watered today) and its crop at its stage. A crop that just grew pops up from small. */
+function drawPlot(p) {
+  wetCell(p.x, p.z, p.watered);
+  const v = p.view || (p.view = { root: null, stage: -1, crop: null, drawn: false, size: 1, growth: 0 });
+  const stage = p.crop ? stageOf(p) : -1;
+  v.size = p.crop ? cropSize(p) : 1;
+  if (v.drawn && v.stage === stage && v.crop === p.crop) {
+    if (v.root && p.growth > v.growth) v.root.scale.setScalar(v.size * 0.8);   // it grew within its stage: a small pop
+    v.growth = p.growth;
+    return;
+  }
+  const pop = v.drawn && !!p.crop;
+  v.stage = stage; v.crop = p.crop; v.drawn = true; v.growth = p.growth;
+  if (v.root) scene.remove(v.root);
+  v.root = null;
+  if (!p.crop) return;
+  const root = v.root = makeCrop(p.crop, stage);
+  root.position.set(p.x, groundY(p.x, p.z), p.z);
+  root.traverse((o) => { o.userData.pick = { kind: 'plot', ref: p }; });
+  root.scale.setScalar(pop ? 0.4 * v.size : v.size);
   scene.add(root);
 }
-/** Crops grow with the clock (also while the tab is closed): check them once a second, and ease new growth up to size. */
+/** How big a crop is drawn within its stage: a stage's model grows from 70% to full over its days. */
+function cropSize(p) {
+  if (ripe(p)) return 1;
+  const days = CROPS[p.crop].days, half = Math.ceil(days / 2), stage = stageOf(p);
+  const [a, b] = stage === 0 ? [0, half] : [half, days];
+  return 0.7 + 0.3 * (p.growth - a) / Math.max(1, b - a);
+}
+/** Gives a plot's block back to the map. */
+function removePlot(p) {
+  if (p.view?.root) scene.remove(p.view.root);
+  untillCell(p.x, p.z, p.was || 'dirt');
+}
+/** New growth eases up to size, a ripe crop breathes (harvest me), and a crop a pest is eating shakes. */
 function tickFarm(dt) {
-  world.farmT = (world.farmT || 0) - dt;
-  if (world.farmT <= 0) { world.farmT = 1; world.plots.forEach(showCrop); }
-  for (const p of world.plots) if (p.root && p.root.scale.x < 1) p.root.scale.setScalar(Math.min(1, ease(p.root.scale.x, 1.05, 9, dt)));
-}
-/** The plot whose crop the tap ray hits: crops stand above their block, so the ground under the tap is a block too far. */
-function hitPlot() {
-  const hits = ray.intersectObjects(world.plots.map((p) => p.root).filter(Boolean), true);
-  return hits.length ? hits[0].object.userData.plot : null;
-}
-/** Plants whichever crop she has fewer of, so the field stays mixed. */
-function nextCrop() {
-  const n = (k) => world.plots.filter((p) => p.crop === k).length;
-  return n(CROPS[0]) <= n(CROPS[1]) ? CROPS[0] : CROPS[1];
-}
-/** Tap with the shovel: dig plain ground into farmland, plant tilled soil, harvest a ripe crop, or hurry a growing one with mana. */
-function tapShovel(hit) {
-  if (BUSY.includes(brain.mode) || brain.mode === 'nap') return;
-  const pl = hitPlot(), c = pl ? { x: pl.x, z: pl.z } : blockCentre(hit.x, hit.z), plot = pl || plotAt(c.x, c.z);
-  ring(new THREE.Vector3(c.x, groundY(c.x, c.z), c.z));
-  if (!plot) return canDig(c.x, c.z) ? orderFarm('dig', c) : say('cantDig', { cool: 4 });
-  if (!plot.crop) return orderFarm('plant', c, { crop: nextCrop() });
-  orderFarm(stageOf(plot) === 2 ? 'harvest' : 'grow', c);
-}
-/** Walks her to her own side of the block, then the action starts (see arrive). */
-function orderFarm(act, c, extra = {}) {
-  if (FARM[act].mana && S.mana < FARM[act].mana) return say('noMana', { cool: 5 });
-  if (S.energy < FARM[act].cost) return say('tired', { cool: 5 });
-  const dx = pet.pos.x - c.x, dz = pet.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
-  const spot = resolveSpot(c.x + (dx / d) * 1.0, c.z + (dz / d) * 1.0);
-  brain.farm = { act, x: c.x, z: c.z, t: 0, beat: 0, done: false, ...extra };
-  go(new THREE.Vector3(spot.x, 0, spot.z), 'farm', false);
-}
-function startFarm() {
-  const F = brain.farm, A = FARM[F.act];
-  brain.mode = 'farm'; F.t = 0; F.beat = 0; F.done = false;
-  S.energy = clamp(S.energy - A.cost, 0, 1); S.mana = clamp(S.mana - (A.mana || 0), 0, 1);
-  pet.faceTo = Math.atan2(F.x - pet.pos.x, F.z - pet.pos.z);
-  pet.play(A.clip, A.dur, true);
-}
-let cellMark;
-function makeCellMark() {
-  cellMark = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.4, depthWrite: false }));
-  cellMark.rotation.x = -Math.PI / 2; cellMark.visible = false; scene.add(cellMark);
-}
-/** With the shovel, a flat square outlines the block under the cursor: gold when she can work it, red when she can't. */
-function moveCellMark() {
-  const h = S.tool === 'shovel' && !MOBILE ? hitGround() : null;             // the ray is already set by toNdc
-  cellMark.visible = !!h;
-  if (!h) return;
-  const pl = hitPlot(), c = pl ? { x: pl.x, z: pl.z } : blockCentre(h.x, h.z), plot = pl || plotAt(c.x, c.z);
-  const ok = plot ? !plot.crop || stageOf(plot) === 2 || S.mana >= FARM.grow.mana : canDig(c.x, c.z);
-  cellMark.material.color.setHex(ok ? GLOW_COLOR : 0xC8442F);
-  cellMark.position.set(c.x, groundY(c.x, c.z) + 0.03, c.z);
-}
-/** A sparkle over a block, where the crop is. */
-function sparkleAt(x, z) {
-  const s = screenOf(new THREE.Vector3(x, groundY(x, z) + 0.3, z)); sparkle(s.x, s.y);
-}
-/** A few clods fly up where the shovel hit. */
-function dirtBurst(x, z, n) {
-  const y = groundY(x, z);
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(DIRT_GEO, DIRT_MAT); m.scale.setScalar(rand(0.04, 0.09)); m.castShadow = true;
-    m.position.set(x + rand(-0.15, 0.15), y + 0.1, z + rand(-0.15, 0.15)); scene.add(m);
-    world.clods.push({ m, v: new THREE.Vector3(rand(-1.1, 1.1), rand(2.2, 3.6), rand(-1.1, 1.1)), spin: rand(-12, 12), dead: 0, floor: y + 0.02 });
+  const t = clock.t, eating = new Set(world.items.filter((i) => i.pest && i.eatT > 0).map((i) => i.prey));
+  for (const p of S.plots) {
+    const r = p.view?.root; if (!r) continue;
+    const full = p.view.size, s = r.scale.x < full ? Math.min(full, ease(r.scale.x, full * 1.05, 9, dt)) : full;
+    r.scale.set(s, s * (ripe(p) && s >= 1 ? 1 + 0.05 * Math.sin(t * 3 + p.x * 2) : 1), s);
+    r.rotation.z = eating.has(p) ? Math.sin(t * 30) * 0.1 : 0;
   }
-}
-/** The result of a farm action lands. */
-function finishFarm(F) {
-  if (F.act === 'dig') { addPlot(F.x, F.z); say('dug', { force: true }); }
-  const plot = plotAt(F.x, F.z);
-  if (F.act === 'plant') { plot.crop = F.crop; plot.at = Date.now(); showCrop(plot); say('planted', { force: true }); }
-  if (F.act === 'harvest') {                              // the crop is food: she eats her harvest
-    plot.crop = null; plot.at = 0; showCrop(plot); sparkleAt(F.x, F.z); Sound.yum();
-    heal(SET.food.harvest);
-    feedFlock(); say('harvest', { force: true });
+  for (const f of world.flying) {                         // a harvest, an egg or a bug flying into her arms
+    f.t += dt; const k = Math.min(1, f.t / 0.45), p = pet.pos;
+    f.root.position.set(lerp(f.from.x, p.x, k), lerp(f.from.y, p.y + 1.2, k) + Math.sin(k * Math.PI) * 0.5, lerp(f.from.z, p.z, k));
+    f.root.scale.setScalar(f.s0 * (1 - 0.85 * k));
+    if (k >= 1) scene.remove(f.root);
   }
-  if (F.act === 'egg') {                                  // an egg is food too
-    scene.remove(F.egg.root); world.eggs = world.eggs.filter((e) => e !== F.egg);
-    sparkleAt(F.x, F.z); Sound.yum();
-    heal(SET.food.egg);
-    say('egg', { force: true });
-  }
-  if (F.act === 'grow') { plot.at = Date.now() - GROW.ripe * 1000; showCrop(plot); sparkleAt(F.x, F.z); Sound.chime(); say('grown', { force: true }); }
-  save();
+  world.flying = world.flying.filter((f) => f.t < 0.45);
 }
+/** Sends a thing she has just picked up flying to her. */
+function flyToHer(root) { world.flying.push({ root, from: root.position.clone(), s0: root.scale.x, t: 0 }); }
 
+/* ───────────── bugs and pests on the move ───────────── */
 function startWalk(it, exit = null) {
   it.walk = { base: (BUG_SPEED[it.kind] || 0.7) * rand(0.75, 1.3), v: 0, heading: it.root.rotation.y, rest: rand(0.2, 0.9), exit, bt: 0 };
   it.walk.goal = bugTarget(it, exit);
 }
 function tickBug(it, dt) {
   const w = it.walk, p = it.root.position, live = world.items.includes(it);
-  const eating = brain.food === it && brain.mode === 'eat';
   let a = 0.3, adv = dt;
-  if (it.state === 'fall' || eating) a = 1;
-  else if (w && live && it.state === 'rest' && it.grow >= 1) {
+  if (w && live && it.grow >= 1) {
     const dPet = Math.hypot(p.x - pet.pos.x, p.z - pet.pos.z) || 1e-3;
-    const scared = !it.hostile && dPet < BUG_FEAR && !pet.want.asleep && brain.mode !== 'sleep';
-    const tgt = it.angry ? foeTarget(it) : null;
-    if (tgt) {                                           // always after its target, round the pond and cliffs; it stops only to bite
-      if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, tgt.x, tgt.z); it.pathT = 0.25; }
-      w.rest = Math.hypot(p.x - tgt.x, p.z - tgt.z) < tgt.reach || it.stun > 0 ? 1 : 0;
+    const scared = !it.pest && dPet < BUG_FEAR && her.mode !== 'sleep';
+    const prey = it.pest && !it.leaving ? pestGoal(it) : null;
+    if (prey) {                                          // a pest heads for its crop, round the pond and cliffs, and stops there to eat
+      if ((it.pathT = (it.pathT || 0) - dt) <= 0) { w.goal = waypoint(p.x, p.z, prey.x, prey.z); it.pathT = 0.25; }
+      w.rest = Math.hypot(p.x - prey.x, p.z - prey.z) < 0.35 || it.stun > 0 || paused() ? 1 : 0;
     }
     if (w.rest > 0 && !scared) {
       w.rest -= dt; w.v = ease(w.v, 0, 8, dt);
-      if (tgt) { w.heading += wrap(Math.atan2(tgt.x - p.x, tgt.z - p.z) - w.heading) * (1 - Math.exp(-10 * dt)); it.root.rotation.y = w.heading; }
+      if (prey) { w.heading += wrap(Math.atan2(prey.x - p.x, prey.z - p.z) - w.heading) * (1 - Math.exp(-10 * dt)); it.root.rotation.y = w.heading; if (it.eatT > 0) a = 1; }
     }
     else {
       w.rest = 0;
-      // steer toward the goal, round the tree and rocks, and away from the box when it gets close
+      // steer toward the goal, round the tree and rocks, and away from her when she gets close
       let sx = w.goal.x - p.x, sz = w.goal.z - p.z; const gd = Math.hypot(sx, sz) || 1e-3; sx /= gd; sz /= gd;
       for (const o of OBSTACLES) {
         const ox = p.x - o.x, oz = p.z - o.z, d = Math.hypot(ox, oz) || 1e-3, r = o.r - BODY_R + 0.7;
         if (d < r + 0.9) { const k = ((r + 0.9 - d) / 0.9) * 1.8; sx += (ox / d) * k; sz += (oz / d) * k; }
       }
       if (scared) { const k = ((BUG_FEAR - dPet) / BUG_FEAR) * 2.4; sx += ((p.x - pet.pos.x) / dPet) * k; sz += ((p.z - pet.pos.z) / dPet) * k; }
-      const want = Math.atan2(sx, sz) + Math.sin(clock.t * 1.7 + it.seed) * 0.25;
+      const want = Math.atan2(sx, sz) + Math.sin(clock.t * 1.7 + it.seed) * (prey ? 0.1 : 0.25);
       w.heading += wrap(want - w.heading) * (1 - Math.exp(-(scared ? 9 : 5) * dt));
       w.v = ease(w.v, scared ? Math.min(w.base * 1.6, BUG_BOLT) : w.base, 4, dt);
       let nx = p.x + Math.sin(w.heading) * w.v * dt, nz = p.z + Math.cos(w.heading) * w.v * dt;
@@ -1714,15 +1648,10 @@ function tickBug(it, dt) {
       p.x = nx; p.z = nz; p.y = ease(p.y, groundY(nx, nz), 12, dt); it.root.rotation.y = w.heading;
       if (w.exit != null) {
         const sp = spanAt(p.z);
-        if (p.x < sp.x0 - 0.5 || p.x > sp.x1 + 0.5) {        // made it across: off it goes
-          if (brain.food === it) say('escaped', { force: true, cool: 6 });
-          if (brain.food === it) { brain.food = null; }
-          vanish(it, 0, 0); return;
-        }
-      } else if (it.life != null && (it.life -= dt) < 0 && !it.claimed) {
-        it.hostile = it.angry = false;                       // a monster that has had enough crawls off like the others
+        if (p.x < sp.x0 - 0.5 || p.x > sp.x1 + 0.5) { vanish(it, 0, 0); return; }   // made it across: off it goes
+      } else if (!it.pest && it.life != null && (it.life -= dt) < 0 && her.order?.ref !== it) {
         w.exit = p.x < (spanAt(p.z).x0 + spanAt(p.z).x1) / 2 ? -1 : 1; w.goal = bugTarget(it, w.exit);
-      } else if (!it.angry && (gd < 0.4 || Math.random() < dt * 0.05)) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
+      } else if (!prey && (gd < 0.4 || Math.random() < dt * 0.05)) { w.goal = bugTarget(it); if (Math.random() < 0.5) w.rest = rand(0.4, 2.2); }
       const k = clamp(w.v / Math.max(w.base, 0.2), 0, 1.8);
       a = 0.35 + 0.65 * Math.min(1, k); adv = dt * (0.5 + 0.7 * k);
     }
@@ -1731,44 +1660,26 @@ function tickBug(it, dt) {
   it.bug.tick((w ? w.bt : clock.t) + it.seed, a);
 }
 function tickProps(dt) {
-  {
-    world.spawnAt -= dt;
-    if (world.spawnAt <= 0) {
-      if (aliveBugs().length >= BUG_MAX) recycleFarBug();
-      if (aliveBugs().length < BUG_MAX) spawnSprout();
-      world.spawnAt = rand(...SET.bugs.appearEvery);
-    }
-    world.foeAt -= dt;
-    if (world.foeAt <= 0) {                                   // the biting kind: one or two by day, up to three at night
-      if (hostileBugs().length < (S.night ? HOSTILE.mostByNight : HOSTILE.mostByDay)) spawnHostile();
-      world.foeAt = rand(...(S.night ? HOSTILE.nightEvery : HOSTILE.dayEvery));
-    }
+  world.spawnAt -= dt;
+  if (world.spawnAt <= 0) {
+    if (aliveBugs().length >= BUG_MAX) recycleFarBug();
+    if (aliveBugs().length < BUG_MAX) spawnSprout();
+    world.spawnAt = rand(...SET.bugs.appearEvery);
   }
+  tickPestSpawns(dt);
   for (const it of world.items) {
-    if (it.bug) tickBug(it, dt);
-    if (it.hostile) tickBite(it, dt);
+    tickBug(it, dt);
+    if (it.pest) tickPestEat(it, dt);
     if (it.grow < 1) {
       it.grow = Math.min(1, it.grow + dt / 0.7);
       const e = 1 - Math.pow(1 - it.grow, 3);
       it.root.scale.setScalar(it.s0 * Math.max(0.001, e) * (1 + 0.14 * Math.sin(it.grow * Math.PI)));
       it.root.position.y = groundY(it.root.position.x, it.root.position.z) - 0.3 * (1 - e);
     }
-    if (it.state === 'fall') {
-      const f = it.fall, p = it.root.position;
-      f.vy -= 16 * dt; p.x += f.vx * dt; p.z += f.vz * dt; p.y += f.vy * dt; it.root.rotation.y += f.spin * dt;
-      const gy = groundY(p.x, p.z);
-      if (p.y <= gy) {
-        p.y = gy; f.bounces++;
-        if (f.bounces === 1) Sound.thud();
-        if (f.bounces >= 3 || Math.abs(f.vy) < 1.5) { it.state = 'rest'; if (it.bug) startWalk(it); }
-        else { f.vy = -f.vy * 0.34; f.vx *= 0.25; f.vz *= 0.25; f.spin *= 0.5; }
-      }
-    }
   }
   for (const v of world.vanishing) {
     v.t += dt; if (v.t < 0) continue;
     const k = Math.min(1, v.t / v.dur), e = 1 - Math.pow(1 - k, 2);
-    if (v.it.bug) tickBug(v.it, dt);
     v.it.root.scale.setScalar(Math.max(0.001, (1 - e) * v.it.s0));
     v.it.root.position.y += dt * v.lift * 3;
     v.it.root.rotation.y += dt * 9;
@@ -1778,22 +1689,32 @@ function tickProps(dt) {
   tickClods(dt);
 }
 
-/* ───────────── the brain ───────────── */
+/* ───────────── her: she does what the player tells her, nothing else ───────────── */
+// Modes: 'idle'; 'walk' (to a spot, or to where an order is done); 'work' (doing an order: a farm action or a broom
+// swing); 'rest' (out of stamina, she sits it out); 'faint' (2:00 came); 'sleep' (the night passing, screen dark).
+// A mode is listed in tickHer() and in YagaPet.moodClip(). An order is a plan from planFor(); taps while she is busy
+// queue up (QUEUE_MAX) and run in turn; a plain walk, the arrow keys or WASD clear the queue.
 const clock = { t: 0 };
-const BUSY = ['eat', 'attack', 'farm'];     // modes she is not interrupted in
-const brain = { mode: 'idle', until: 1.2, goal: null, purpose: null, food: null, hops: 0, pause: 0, noticed: null, noticeAt: -9,
-  reactUntil: 0, contentUntil: 0, yawnAt: 8, eatT: 0, glanceUntil: 0, glance: new THREE.Vector3(), napUntil: 0,
-  pokes: [], lastPoke: -99, grinUntil: 0 };
-
-function go(goal, purpose, urgent = false) {
-  brain.mode = 'travel'; brain.goal = goal; brain.purpose = purpose; brain.urgent = urgent; brain.hops = 0; brain.pause = urgent ? 0.05 : 0.25;
+const QUEUE_MAX = 12;
+const her = { mode: 'idle', goal: new THREE.Vector3(), run: false, hops: 0, pause: 0, order: null, queue: [], job: null,
+  restUntil: 0, sleepT: 0, passedOut: false, slept: false, contentUntil: 0, pokes: [], lastPoke: -99, snoreAt: 0 };
+const timers = [];
+/** Runs fn after `secs` of game time (clock.t, so advance() steps it too). */
+function later(secs, fn) { timers.push({ at: clock.t + secs, fn }); }
+function tickTimers() {
+  for (let i = timers.length - 1; i >= 0; i--) if (clock.t >= timers[i].at) timers.splice(i, 1)[0].fn();
 }
+/** The clock and the pests stand still while a panel is open or she sleeps. */
+const paused = () => !!panelOpen() || her.mode === 'sleep';
 
+function go(goal, run = false) {
+  her.mode = 'walk'; her.goal.set(goal.x, 0, goal.z); her.run = run; her.hops = 0; her.pause = 0;
+}
 function planHop() {
-  const p = pet.pos, g = waypoint(p.x, p.z, brain.goal.x, brain.goal.z);   // round the pond and cliffs, not through them
+  const p = pet.pos, g = waypoint(p.x, p.z, her.goal.x, her.goal.z);   // round the pond and cliffs, not through them
   let dx = g.x - p.x, dz = g.z - p.z; const dist = Math.hypot(dx, dz) || 1e-3;
   let dirX = dx / dist, dirZ = dz / dist;
-  const len = Math.min(dist, brain.urgent ? 1.7 : rand(1.0, 1.4));
+  const len = Math.min(dist, her.run ? 1.7 : rand(1.0, 1.4));
   let lx = p.x + dirX * len, lz = p.z + dirZ * len;
   for (const o of OBSTACLES) {
     if (segNear(p.x, p.z, lx, lz, o) < o.r + 0.05) {
@@ -1806,254 +1727,372 @@ function planHop() {
     }
   }
   const s = resolveSpot(lx, lz);
-  const tired = S.energy < 0.3 ? -0.12 : 0;
-  pet.startHop(s.x, s.z, { h: 0.42 + tired + (brain.urgent ? 0.1 : 0) });
-  brain.hops++;
+  pet.startHop(s.x, s.z);
+  her.hops++;
 }
 
-function arrive() {
-  const pur = brain.purpose;
-  if (pur === 'food' && brain.food && world.items.includes(brain.food)) return startEat(brain.food);
-  if (pur === 'attack' && brain.foe && world.items.includes(brain.foe)) return startAttack(brain.foe);
-  if (pur === 'farm' && brain.farm) return startFarm();
-  if (pur === 'home' || pur === 'homeNap') {
+/* ── plans: what a tap on something would do with the tool in her hand ── */
+// `no` says why it can't be done (a key of ui.no in the words, and of NO_SAY for her line); `info` marks the
+// harmless ones (a crop still growing, one already watered) that only get a label.
+const NO_SAY = { closed: 'stallClosed', trough: 'troughFull', feed: 'noFeed', full: 'canFull', broom: 'needBroom', water: 'canEmpty',
+  undug: 'digFirst', seeds: 'noSeeds', dry: 'waterFirst', mana: 'noMana', growing: 'notRipe', watered: 'watered' };
+const INFO = ['growing', 'watered'];
+/** The plan for a tap on target `t` ({ kind, x, z, ref }: from pickTarget()) with `tool`:
+ *  { act, tool, x, z, ref, target, no?, info?, chase?, spot?, ... }. act 'walk' means just go there. */
+function planFor(t, tool = S.tool) {
+  if (!t) return null;
+  const P = (act, extra = {}) => {
+    const o = { act, tool, x: t.x, z: t.z, ref: t.ref, target: t, ...extra };
+    if (o.no && INFO.includes(o.no)) o.info = true;
+    return o;
+  };
+  switch (t.kind) {                                     // the buildings: she stands at their front and faces them
+    case 'house': return P('bed', { spot: HOUSE_DOOR, x: HOUSE.x, z: HOUSE.z });
+    case 'stall': return P('shop', { spot: STALL.use, x: STALL.x, z: STALL.z, no: shopOpen() ? null : 'closed' });
+    case 'trough': return P('feed', { spot: TROUGH.use, x: TROUGH.x, z: TROUGH.z, no: S.trough >= S.hens ? 'trough' : count(S, 'feed') ? null : 'feed' });
+    case 'well': return tool === 'can' ? P('fill', { spot: WELL.use, x: WELL.x, z: WELL.z, no: S.can >= canHolds(S) ? 'full' : null }) : P('walk', { x: WELL.use.x, z: WELL.use.z });
+    case 'egg': return P('pick', { x: t.ref.x, z: t.ref.z });
+    case 'hen': return P('pet', { chase: true });
+    case 'bug': return t.ref.pest ? P('swat', { chase: true, no: tool === 'broom' ? null : 'broom' }) : P('catch', { chase: true });
+  }
+  // a block of ground, or the crop standing on it
+  const c = blockCentre(t.x, t.z), p = plotAt(c.x, c.z), at = (act, extra) => P(act, { x: c.x, z: c.z, ...extra });
+  if (tool === 'can' && isWater(t.x, t.z)) return at('fill', { pond: true, no: S.can >= canHolds(S) ? 'full' : null });
+  if (tool === 'shovel' && !p && canDig(c.x, c.z)) return at('dig');
+  if (tool === 'can' && p && !ripe(p)) return at('water', { no: p.watered ? 'watered' : S.can ? null : 'water' });
+  if (tool.startsWith('seed:') && !p?.crop) {
+    if (p) return at('plant', { crop: tool.slice(5), no: count(S, tool) ? null : 'seeds' });
+    if (canDig(c.x, c.z)) return at('plant', { crop: tool.slice(5), no: 'undug' });
+  }
+  if (tool === 'spell' && p?.crop && !ripe(p)) return at('grow', { no: !p.watered ? 'dry' : S.mana < SET.mana.grow ? 'mana' : null });
+  if (p?.crop) return ripe(p) ? at('harvest') : at('harvest', { no: 'growing', n: daysLeft(p) });
+  const s = resolveSpot(t.x, t.z);
+  return P('walk', { x: s.x, z: s.z });
+}
+/** What a plan says on screen: "Dig", "Water (8 left)", "The can is empty: fill it at the well"… */
+function planLabel(o) {
+  const crop = o.crop || o.ref?.crop || (o.x != null ? plotAt(o.x, o.z)?.crop : null);
+  const vars = { crop: crop ? itemName(crop) : '', item: itemName(o.tool), bug: o.ref?.kind ? bugName(o.ref.kind) : '',
+    n: o.act === 'water' ? S.can : o.act === 'plant' ? count(S, o.tool) : o.n ?? 0 };
+  if (o.no) return fill(o.no === 'growing' ? plural(UI.no.growing, o.n) : UI.no[o.no], vars);
+  return fill(UI.act[o.act], vars);
+}
+const alive = (o) => (o.act === 'pick' ? S.eggs.includes(o.ref) : o.act === 'pet' ? world.hens.includes(o.ref) : !o.chase || world.items.includes(o.ref));
+const targetPos = (o) => (o.chase ? o.ref.root.position : { x: o.x, z: o.z });
+const REACH = { swat: SWING.reach * 0.85, catch: 1.15, pet: 1.0 };
+
+/** Gives her an order. A plain walk goes at once; work waits its turn if she is busy. Returns whether she took it. */
+function command(o, run = false) {
+  if (!o) return false;
+  if (her.mode === 'rest') { say('resting', { cool: 4 }); return false; }
+  if (her.mode === 'faint' || her.mode === 'sleep') return false;
+  if (o.no) { refuse(o); return false; }
+  o.run = run;
+  if (o.act === 'walk') {
+    if (her.mode === 'work') her.queue = [o];
+    else { her.queue = []; her.order = null; go(o, run); }
+    return true;
+  }
+  const same = (q) => q.act === o.act && (o.spot ? true : o.chase || o.act === 'pick' ? q.ref === o.ref : q.x === o.x && q.z === o.z);
+  if (her.order || her.mode === 'work') {
+    const cur = her.job?.o || her.order;
+    if ((cur && same(cur)) || her.queue.some(same) || her.queue.length >= QUEUE_MAX) return false;
+    her.queue = her.queue.filter((q) => q.act !== 'walk');
+    her.queue.push(o);
+    return true;
+  }
+  startOrder(o);
+  return true;
+}
+/** She can't: a short sound, her line, and the reason on screen (an `info` plan only shows its label). */
+function refuse(o) {
+  flashTip(o, 1.8);
+  if (o.info) return;
+  Sound.nope(); say(NO_SAY[o.no], { cool: 3, force: true });
+}
+function startOrder(o) {
+  her.order = o;
+  if (o.act === 'walk') { her.order = null; go(o, o.run); return; }
+  const spot = standSpot(o);
+  if (spot) go(spot, o.run); else beginWork(o);
+}
+/** Where she must stand for an order, or null if she can do it from where she is. */
+function standSpot(o) {
+  if (o.spot) return Math.hypot(pet.pos.x - o.spot.x, pet.pos.z - o.spot.z) < 0.4 ? null : o.spot;
+  const tp = targetPos(o), reach = o.chase ? REACH[o.act] : FARM[o.act].reach;
+  const dx = pet.pos.x - tp.x, dz = pet.pos.z - tp.z, d = Math.hypot(dx, dz) || 1;
+  if (d <= reach + 0.3 && (d >= 0.45 || o.chase)) return null;
+  if (o.chase) return tp;
+  return resolveSpot(tp.x + (dx / d) * reach, tp.z + (dz / d) * reach);
+}
+function tickWalk(dt) {
+  const o = her.order;
+  if (o && o.chase) {
+    if (!alive(o)) { her.order = null; her.mode = 'idle'; if (o.act === 'catch') say('escaped', { cool: 5 }); return; }
+    const p = o.ref.root.position; her.goal.set(p.x, 0, p.z);
+  }
+  if (pet.airborne) return;
+  her.pause -= dt;
+  if (her.pause > 0) return;
+  let arrived = Math.hypot(her.goal.x - pet.pos.x, her.goal.z - pet.pos.z) < 0.35;
+  if (o && o.chase) {
+    const p = o.ref.root.position;
+    arrived = Math.hypot(p.x - pet.pos.x, p.z - pet.pos.z) < REACH[o.act];
+    if (!arrived && her.hops > 40) { her.order = null; her.mode = 'idle'; say('escaped', { cool: 5 }); return; }   // it got away
+  }
+  if (arrived || (!o?.chase && her.hops > 30)) {
+    her.mode = 'idle';
+    if (o) beginWork(o);
+    return;
+  }
+  planHop();
+}
+/** She has arrived: if the order still makes sense, she does it (the field may have changed while she walked). */
+function beginWork(o) {
+  her.order = null; her.mode = 'idle';
+  const now = alive(o) ? planFor(o.target, o.tool) : null;
+  if (!now || now.act !== o.act) return;
+  if (now.no) { refuse(now); her.queue = her.queue.filter((q) => q.act !== o.act); return; }   // out of water, seeds…: the rest of those can't be done either
+  if (o.act === 'shop') { pet.faceTo = Math.atan2(o.x - pet.pos.x, o.z - pet.pos.z); openStall(S, STALL_EVENTS); return; }
+  if (o.act === 'bed') {
     pet.faceTo = faceCamAngle(); world.house.stompAt = clock.t;
-    if (pur === 'homeNap') { brain.mode = 'nap'; brain.napUntil = clock.t + 22; boxReact('nap', 0.8); return; }
-    brain.mode = 'idle'; brain.until = rand(2.5, 4); say(null, { force: true, text: pick(HOUSE_LINES) });
-    setTimeout(() => boxReact('home', 0.6), 2600); return;
+    openBed(S.hour < SET.day.nightStarts, clockText(S.hour), () => startSleep(false));
+    return;
   }
-  if (pur === 'summon') { brain.mode = 'idle'; brain.until = rand(1.5, 3.5); pet.faceTo = faceCamAngle(); return; }
-  brain.mode = 'idle'; brain.until = rand(1.2, 3.2);
-  if (Math.random() < 0.7) pet.faceTo = faceCamAngle() + pick([-0.32, 0.32, 0]);
+  her.order = o;
+  const cost = SET.stamina[o.act] * (o.act === 'dig' && S.up.steelShovel ? SET.shovel.steelDig : 1);
+  S.stamina = Math.max(0, S.stamina - (cost || 0));
+  if (o.act === 'grow') S.mana = Math.max(0, S.mana - SET.mana.grow);
+  const tp = targetPos(o);
+  pet.faceTo = Math.atan2(tp.x - pet.pos.x, tp.z - pet.pos.z);
+  her.mode = 'work'; her.job = { o, t: 0, beat: 0, done: false };
+  if (o.act === 'swat') { pet.swing(); Sound.swing(); return; }
+  const A = FARM[o.act];
+  pet.play(A.clip, A.dur, true, A.from || 0);
+}
+function tickWork(dt) {
+  const J = her.job, o = J.o; J.t += dt;
+  if (o.chase && alive(o)) { const p = o.ref.root.position; pet.faceTo = Math.atan2(p.x - pet.pos.x, p.z - pet.pos.z); }
+  if (o.act === 'swat') {
+    if (!J.done && J.t >= SWING.hitAt) { J.done = true; if (alive(o)) strike(o.ref); }
+    if (J.t < SWING.dur) return;
+    her.mode = 'idle'; her.job = null; her.order = null;
+    if (S.stamina <= 0) return startRest();
+    if (alive(o) && !her.queue.length) startOrder(o);     // keep at it until it is gone, unless she has been told something else
+    return;
+  }
+  const A = FARM[o.act], tp = targetPos(o);
+  while (J.beat < A.beats.length && J.t >= A.beats[J.beat]) {
+    if (A.dirt) { dirtBurst(tp.x, tp.z, A.dirt); Sound.thud(); }
+    if (A.drops) { dropBurst(tp.x, tp.z, A.drops, o.act === 'fill'); if (!J.beat) Sound.pour(); }
+    J.beat++;
+  }
+  if (!J.done && J.t >= A.doneAt) { J.done = true; finish(o); }
+  if (J.t >= A.dur) {
+    her.mode = 'idle'; her.job = null; her.order = null;
+    if (S.stamina <= 0) startRest();
+  }
+}
+/** The result of an order lands. */
+function finish(o) {
+  const st = S.stats, p = o.x != null ? plotAt(o.x, o.z) : null;
+  switch (o.act) {
+    case 'dig': {
+      if (p || !canDig(o.x, o.z)) break;
+      const np = newPlot(o.x, o.z, kindAt(o.x, o.z));
+      S.plots.push(np); tillCell(o.x, o.z); drawPlot(np); st.dug++;
+      say('dug', { cool: 25 });
+      break;
+    }
+    case 'plant':
+      if (!p || p.crop || !take(S, o.tool)) break;
+      p.crop = o.crop; p.growth = 0; p.bare = 0; drawPlot(p); st.planted++;
+      say('planted', { cool: 20 });
+      break;
+    case 'water':
+      if (!p || p.watered || S.can <= 0) break;
+      S.can--; p.watered = true; drawPlot(p); st.watered++;
+      if (!S.can) say('canEmpty', { force: true }); else say('wateredOne', { cool: 40 });
+      break;
+    case 'harvest': {
+      if (!p || !ripe(p)) break;
+      const crop = p.crop, root = p.view.root;
+      p.view.root = null; p.crop = null; p.growth = 0; drawPlot(p);
+      if (root) flyToHer(root);
+      add(S, crop); st.harvested++; plusFx(o.x, o.z, crop);
+      Sound.yum(); say('harvest', { cool: 12 }); boxReact('harvest', 0.25);
+      break;
+    }
+    case 'grow':
+      if (!p || !p.crop || ripe(p)) break;
+      p.growth++; drawPlot(p); sparkleAt(o.x, o.z); Sound.chime();
+      say(ripe(p) ? 'grownRipe' : 'grown', { force: true });
+      break;
+    case 'fill':
+      S.can = canHolds(S); say('filled', { cool: 30 });
+      break;
+    case 'pick': {
+      const e = o.ref;
+      if (!S.eggs.includes(e)) break;
+      S.eggs = S.eggs.filter((x) => x !== e); flyToHer(e.root);
+      add(S, 'egg'); st.eggs++; plusFx(e.x, e.z, 'egg'); Sound.plop(); say('egg', { cool: 15 });
+      break;
+    }
+    case 'catch': {
+      const b = o.ref, bp = b.root.position;
+      if (!world.items.includes(b) || Math.hypot(bp.x - pet.pos.x, bp.z - pet.pos.z) > REACH.catch + 0.5) { say('escaped', { cool: 4 }); break; }
+      world.items = world.items.filter((i) => i !== b); flyToHer(b.root);
+      add(S, `bug:${b.kind}`); if (!st.caught.includes(b.kind)) st.caught.push(b.kind);
+      plusFx(bp.x, bp.z, `bug:${b.kind}`); Sound.squeak();
+      say('caught', { force: true, map: (l) => l.replace('{bug}', bugName(b.kind)) });
+      break;
+    }
+    case 'feed': {
+      const n = Math.min(S.hens - S.trough, count(S, 'feed'));
+      if (n <= 0) break;
+      take(S, 'feed', n); S.trough += n; showTrough(); Sound.plop(); say('fed', { cool: 10 });
+      break;
+    }
+    case 'pet': {
+      const h = o.ref; h.rest = Math.max(h.rest, 1.2); Sound.cluck();
+      const s = screenOf(h.root.position.clone().setY(h.root.position.y + 0.5)); heart(s.x, s.y);
+      say('henPet', { cool: 12 });
+      break;
+    }
+  }
+  checkGoals(); save();
+}
+/** Out of stamina: she sits down for a while and gets a little back. */
+function startRest() {
+  her.mode = 'rest'; her.restUntil = clock.t + SET.her.restFor; her.queue = []; her.order = null; pet.hop = null;
+  say('exhausted', { force: true }); later(2, () => boxReact('rest', 0.7));
+}
+/** The arrow keys or WASD walk her directly (screen up is away from the camera); Shift runs. Any order is dropped. */
+const keys = new Set();
+function steerByKeys(dt) {
+  let f = 0, r = 0;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) f++;
+  if (keys.has('KeyS') || keys.has('ArrowDown')) f--;
+  if (keys.has('KeyD') || keys.has('ArrowRight')) r++;
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) r--;
+  pet.steer = false;
+  if ((!f && !r) || !['idle', 'walk'].includes(her.mode) || panelOpen()) return;
+  const yaw = rigAt(zoom, camera.aspect).yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  let x = fx * f + -fz * r, z = fz * f + fx * r; const l = Math.hypot(x, z); x /= l; z /= l;
+  her.queue = []; her.order = null; her.mode = 'idle'; pet.hop = null;
+  const run = keys.has('Shift'), sp = run ? RUN_SPEED : WALK_SPEED, p = pet.pos;
+  pet.gait = run ? 'run' : 'walk'; pet.steer = true; pet.faceTo = Math.atan2(x, z);
+  const ok = (a, b) => !blocked(a, b) && Math.abs(groundY(a, b) - groundY(p.x, p.z)) < 0.55;
+  const nx = p.x + x * sp * dt, nz = p.z + z * sp * dt;
+  if (ok(nx, nz)) { p.x = nx; p.z = nz; } else if (ok(nx, p.z)) p.x = nx; else if (ok(p.x, nz)) p.z = nz;   // slide along walls
+}
+/** E or Space: the tool in her hand on whatever is right in front of her. */
+function useFacing() {
+  if (!['idle', 'walk', 'work'].includes(her.mode)) return;
+  const hx = Math.sin(pet.heading), hz = Math.cos(pet.heading), fx = pet.pos.x + hx * 0.8, fz = pet.pos.z + hz * 0.8;
+  const near = (x, z, r) => Math.hypot(x - fx, z - fz) < r;
+  let t = null;
+  const it = world.items.filter((i) => i.grow >= 1 && near(i.root.position.x, i.root.position.z, 1.0))
+    .sort((a, b) => (b.pest ? 1 : 0) - (a.pest ? 1 : 0))[0];
+  if (it) t = { kind: 'bug', ref: it, x: it.root.position.x, z: it.root.position.z };
+  const egg = !t && S.eggs.find((e) => near(e.x, e.z, 0.7));
+  if (egg) t = { kind: 'egg', ref: egg, x: egg.x, z: egg.z };
+  for (const [kind, use] of [['stall', STALL.use], ['well', WELL.use], ['trough', TROUGH.use], ['house', HOUSE_DOOR]]) {   // standing at one of these
+    if (!t && Math.hypot(use.x - pet.pos.x, use.z - pet.pos.z) < 0.9) t = { kind, x: use.x, z: use.z };
+  }
+  if (!t) { const c = blockCentre(pet.pos.x + hx * 0.75, pet.pos.z + hz * 0.75); t = { kind: 'ground', x: c.x, z: c.z }; }
+  const o = planFor(t);
+  if (o.act === 'walk') { flashTip({ ...o, act: 'nothing' }, 1.2); return; }
+  if (command(o)) flashTip(o, 1.0);
 }
 
-function happyHop(big = false) {
-  if (big) boxReact('dance', 0.35);
-  if (pet.airborne || brain.mode === 'sleep') return;
-  pet.startHop(pet.pos.x, pet.pos.z, { h: big ? 0.95 : 0.6, big, ant: 0.12 });
-}
-
-function startEat(it) {
-  brain.mode = 'eat'; brain.eatT = 0; brain.food = it; it.claimed = true;
-  pet.faceTo = Math.atan2(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z);
-  it.from = it.root.position.clone();
-}
-
-function poke() {
+function tickHer(dt) {
   const t = clock.t;
-  pet.pokeAt = t; brain.lastPoke = t;
-  brain.pokes = brain.pokes.filter((p) => t - p < 5); brain.pokes.push(t);
-  if (brain.mode === 'sleep') {       // sleepy grumble, one eye open
-    brain.reactUntil = t + 1.2; pet.st.puffV += 3; Sound.grumble(); say('sleep_poke', { force: true, cool: 2.5 }); return;
+  steerByKeys(dt);
+  switch (her.mode) {
+    case 'idle':
+      if (her.queue.length && !pet.steer) startOrder(her.queue.shift());
+      break;
+    case 'walk': tickWalk(dt); break;
+    case 'work': tickWork(dt); break;
+    case 'rest':
+      if (t > her.snoreAt) { her.snoreAt = t + 3.2; Sound.snore(); zz(); }
+      if (t >= her.restUntil) { her.mode = 'idle'; S.stamina = Math.max(S.stamina, SET.her.restGain); say('rested', { force: true }); }
+      break;
+    case 'faint':
+      her.sleepT += dt;
+      if (her.sleepT > 2.4) startSleep(true);
+      break;
+    case 'sleep':
+      her.sleepT += dt;
+      if (!her.slept && her.sleepT > 1.0) { her.slept = true; nightPasses(); }
+      break;
   }
-  pet.startleAt = t;
-  brain.mode = 'react'; brain.until = 1.5;
-  brain.reactUntil = t + 0.8;
-  pet.st.puffV += 9; pet.faceTo = faceCamAngle();
-  const riled = brain.pokes.length >= 3;
-  Sound.squeak();
-  if (!riled && Math.random() < 0.5) setTimeout(() => happyHop(Math.random() < 0.4), 180);
-  pokeTalk();
-  setTimeout(() => boxReact('yagaPoked', 0.5), 1500);
 }
 
-function tickBrain(dt) {
-  const t = clock.t, w = pet.want, it = brain.food, HER = SET.her;
-  // ── needs drift ──
-  const resting = brain.mode === 'idle' && !pet.airborne;      // stamina comes back when she stands still, and fast in a nap
-  if (brain.mode === 'sleep' || brain.mode === 'nap') S.energy = clamp(S.energy + dt / HER.staminaNap, 0, 1);
-  else S.energy = clamp(S.energy - dt / HER.staminaDrain + (resting ? dt / HER.staminaRest : 0), 0, 1);
-  S.mana = clamp(S.mana + dt / HER.manaRegain, 0, 1);
-  S.health = clamp(S.health + dt / HER.healthRecover, 0, 1);   // it comes back on its own; bites are what take it
-
-  if (brain.mode === 'nap' && t > brain.napUntil) { brain.mode = 'idle'; brain.until = 1; pet.st.puffV += 5; }
-
-  // ── defaults for the face: the expression follows the mood ──
-  const sleepy = S.energy < 0.28;   // night or day: she keeps going, she just gets tired
-  let face = t < brain.grinUntil ? 'grin' : 'smile';
-  if (S.health < 0.3 || sleepy) face = 'grumpy';
-  let up = FACES[face].up, lo = FACES[face].lo, flap = 0, look = null, droop = 0.5, puff = 0, squat = 0, shake = 0;
-  if (sleepy) { up = Math.min(up, 0.12); droop += 0.1; }
-  if (S.health < 0.4) { up = Math.min(up, 0.25); droop += 0.15; }
-  if (brain.noticed && t - brain.noticeAt < 2.2 && world.items.includes(brain.noticed)) {
-    look = brain.noticed.root.position; up = 0.78;
-    if (t - brain.noticeAt < 1.2) { face = 'oh'; lo = -0.8; }
-  }
-  else if (t < brain.glanceUntil && !pet.hover) look = brain.glance;
-  if (sleepy && t > brain.yawnAt && brain.mode === 'idle') { brain.yawnAt = t + rand(6, 10); brain.yawnUntil = t + 1.4; Sound.yawn(); }
-  if (t < (brain.yawnUntil || 0)) { flap = 1.5 * Math.sin(clamp((brain.yawnUntil - t) / 1.4, 0, 1) * Math.PI); face = 'oh'; up = 0.02; lo = -0.3; }
-
-  // a bug she was sent for is free again (something interrupted her): go back for it
-  if (!pet.airborne && (brain.mode === 'idle' || (brain.mode === 'travel' && brain.purpose === 'wander'))) {
-    const given = world.items.filter((i) => i.given && i.state === 'rest' && !i.claimed && i.grow >= 1);
-    if (given.length) {
-      const cost = (i) => i.root.position.distanceTo(pet.pos) + (i.given ? 0 : 4);
-      given.sort((a, b) => cost(a) - cost(b));
-      return fetchFood(given[0], true);
-    }
-  }
-
-  switch (brain.mode) {
-    case 'idle': {
-      if (pet.airborne) break;
-      if (S.energy < 0.04) { brain.mode = 'nap'; brain.napUntil = t + 22; boxReact('nap', 0.8); break; }
-      const foe = S.tool === 'broom' && S.energy >= SWING.cost ? foeToDefend() : null;   // with the broom in hand she looks after the flock
-      if (foe) {
-        say('defend', { cool: 14 });
-        if (Math.hypot(foe.root.position.x - pet.pos.x, foe.root.position.z - pet.pos.z) < SWING.reach) startAttack(foe);
-        else { brain.foe = foe; go(foe.root.position.clone(), 'attack', true); }
-        break;
-      }
-      brain.until -= dt;
-      if (Math.random() < dt * 0.25 && t > brain.glanceUntil) {
-        brain.glanceUntil = t + rand(1, 2.2);
-        brain.glance.set(pick([TREE.x, -4, 6, camera.position.x]), rand(0.5, 3.2), pick([TREE.z, 2, -6, camera.position.z]));
-      }
-      if (brain.until <= 0) brain.until = rand(1.5, 3.5);   // she stays put; the player moves her
-      break;
-    }
-    case 'travel': {
-      if (brain.purpose === 'food') {
-        if (!it || !world.items.includes(it)) { brain.mode = 'idle'; brain.until = 0.5; break; }
-        look = it.root.position; up = 0.7;
-        const fp = it.root.position;
-        if (it.walk) {          // lead the target a little, land just short of it on our side
-          const wv = it.walk, px = fp.x + Math.sin(wv.heading) * wv.v * 0.45, pz = fp.z + Math.cos(wv.heading) * wv.v * 0.45;
-          const dx = px - pet.pos.x, dz = pz - pet.pos.z, d = Math.hypot(dx, dz) || 1e-3;
-          const r = resolveSpot(px - (dx / d) * (BODY_R + 0.4), pz - (dz / d) * (BODY_R + 0.4)); brain.goal.set(r.x, 0, r.z);
-        } else {
-          const cx = fp.x - camera.position.x, cz = fp.z - camera.position.z, cd = Math.hypot(cx, cz) || 1e-3;
-          const reach = BODY_R + 0.65;
-          const r = resolveSpot(fp.x + (cx / cd) * reach, fp.z + (cz / cd) * reach); brain.goal.set(r.x, 0, r.z);
-        }
-      }
-      if (brain.purpose === 'attack') {                  // keep after the bug until it is in broom reach
-        const f = brain.foe;
-        if (!f || !world.items.includes(f)) { brain.mode = 'idle'; brain.until = 0.5; break; }
-        look = f.root.position; up = 0.6; brain.goal.set(f.root.position.x, 0, f.root.position.z);
-      }
-      if (pet.airborne) break;
-      brain.pause -= dt;
-      if (brain.pause > 0) break;
-      const dist = Math.hypot(brain.goal.x - pet.pos.x, brain.goal.z - pet.pos.z);
-      const foeD = brain.purpose === 'attack' && brain.foe ? Math.hypot(brain.foe.root.position.x - pet.pos.x, brain.foe.root.position.z - pet.pos.z) : 9;
-      const foodD = brain.purpose === 'food' && it ? Math.hypot(it.root.position.x - pet.pos.x, it.root.position.z - pet.pos.z) : 9;
-      const chasing = brain.purpose === 'food' && it && it.walk;
-      const closeEnough = chasing ? foodD < BODY_R + 0.95
-        : brain.purpose === 'attack' ? foeD < SWING.reach * 0.9
-        : brain.purpose === 'food' ? (dist < 0.4 && foodD < BODY_R + 1.2) || (brain.hops > 10 && foodD < BODY_R + 1.0) : dist < 0.35;
-      if (chasing && !closeEnough && brain.hops > 40) {   // lost it: let it go
-        it.claimed = false; brain.food = null; brain.mode = 'idle'; brain.until = rand(1, 2); say('escaped', { force: true, cool: 6 }); break;
-      }
-      if (closeEnough || (!chasing && brain.hops > 30)) { arrive(); break; }
-      planHop();
-      brain.pause = 0;   // she walks; no stop-and-go between steps
-      break;
-    }
-    case 'attack': {
-      const f = brain.foe, alive = f && world.items.includes(f);
-      brain.atkT += dt;
-      if (alive) { look = f.root.position; pet.faceTo = Math.atan2(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z); }
-      up = 0.5;
-      if (!brain.atkHit && brain.atkT >= SWING.hitAt) { brain.atkHit = true; if (alive) strike(f); }
-      if (brain.atkT >= SWING.dur) {                     // the swing is over: keep at it until the bug is dead or she is spent
-        const left = alive && world.items.includes(f);
-        if (!left) { brain.mode = 'idle'; brain.until = 0.6; }
-        else if (S.energy < SWING.cost) { brain.mode = 'idle'; brain.until = 0.6; say('tired', { cool: 5 }); }
-        else if (Math.hypot(f.root.position.x - pet.pos.x, f.root.position.z - pet.pos.z) < SWING.reach) startAttack(f);
-        else go(f.root.position.clone(), 'attack', true);   // the hit shoved it back: step in again
-      }
-      break;
-    }
-    case 'farm': {
-      const F = brain.farm, A = FARM[F.act]; F.t += dt;
-      up = 0.5;
-      while (F.beat < A.beats.length && F.t >= A.beats[F.beat]) { if (A.dirt) dirtBurst(F.x, F.z, A.dirt); Sound.thud(); F.beat++; }
-      if (!F.done && F.t >= A.doneAt) { F.done = true; finishFarm(F); }
-      if (F.t >= A.dur) { brain.mode = 'idle'; brain.until = 0.6; brain.farm = null; }
-      break;
-    }
-    case 'eat': {
-      brain.eatT += dt;
-      const e = brain.eatT;
-      look = it && world.items.includes(it) ? it.root.position : null;
-      up = 0.55; face = 'oh';
-      if (e < 0.3) flap = 0.5;
-      else if (e < 0.62) {
-        flap = 1.1;
-        if (it && world.items.includes(it)) {
-          const m = pet.mouthPoint.getWorldPosition(new THREE.Vector3());
-          const k = smooth(0.3, 0.62, e);
-          it.root.position.lerpVectors(it.from, m, k);
-          it.root.scale.setScalar(it.s0 * (1 - 0.8 * k));
-        }
-      } else {
-        if (it && world.items.includes(it)) { vanish(it, 0, 0.1); eaten(); }
-        const c = (e - 0.62) / 0.3;
-        flap = e < 1.52 ? -0.55 + 1.1 * (0.5 + 0.5 * Math.cos(c * Math.PI * 2)) : 0;
-        if (e >= 1.52) face = 'grin';
-        if (e < 1.52 && Math.floor(c) !== brain.lastChomp) { brain.lastChomp = Math.floor(c); Sound.chomp(); }
-        up = 0.25; lo = -0.45;
-      }
-      if (e > 1.7) {
-        brain.lastChomp = -1;
-        brain.mode = 'idle'; brain.until = rand(0.8, 1.6);
-        pet.st.puffV += 6;
-        Sound.yum(); brain.grinUntil = t + 1.2; if (Math.random() < 0.6) say('yum', { force: true });
-      }
-      break;
-    }
-    case 'react': {
-      brain.until -= dt;
-      if (t < brain.reactUntil) { up = 0.88; lo = -0.82; flap = 0.5; face = 'oh'; }
-      if (brain.until <= 0) { brain.mode = 'idle'; brain.until = rand(1, 2.5); }
-      break;
-    }
-    case 'sleep': case 'nap': {
-      w.asleep = !(t < brain.reactUntil);
-      up = 0.3; lo = -0.5; droop = 0.5; puff = -0.1; face = w.asleep ? 'smile' : 'grumpy'; flap = w.asleep ? -0.35 : 0;
-      if (t > (brain.snoreAt || 0)) { brain.snoreAt = t + 3.2; if (w.asleep) { Sound.snore(); zz(); } }
-      break;
-    }
-  }
-  if (brain.mode !== 'sleep' && brain.mode !== 'nap') w.asleep = false;
-  if (t < brain.contentUntil) { up = 0.06; lo = -0.28; puff += 0.15; look = null; face = 'grin'; }
-  // poked again and again: grumpy at 3, snarling at 6; calms down 3.5s after the last one
-  const pokeN = brain.pokes.filter((p) => t - p < 5).length;
-  if (t - brain.lastPoke < 3.5 && pokeN >= 3 && brain.mode !== 'sleep' && brain.mode !== 'nap') {
-    face = pokeN >= 6 ? 'snarl' : 'grumpy'; up = Math.min(up, FACES[face].up + 0.1); lo = FACES[face].lo;
-  }
-  if (brain.mode !== 'eat' && t >= (brain.yawnUntil || 0)) { const tf = talkFlap(t); if (tf !== null) flap = tf; }
-  Object.assign(w, { up, lo, flap, face, look, droop, puff, squat, shake });
+/* ───────────── the day's end: bed, or passing out at 2:00 ───────────── */
+function passOut() {
+  her.mode = 'faint'; her.sleepT = 0; her.queue = []; her.order = null; her.job = null; pet.hop = null;
+  closePanel(); pet.play('fall', 3, true); say('passOut', { force: true });
 }
-
-// tray: tap a bug kind → it hunts the nearest one of those
-function orderHunt(kind) {
-  const prey = aliveBugs(kind).filter((i) => i.state === 'rest' && i.grow >= 1);
-  if (!prey.length) { pet.st.puffV += 2; say('nobug', { force: true, cool: 2, map: (l) => l.replace('{bug}', bugName(kind)) }); return; }
-  if (brain.mode === 'sleep' || brain.mode === 'nap') return poke();
-  if (BUSY.includes(brain.mode)) { say('busy', { force: true, cool: 3 }); return; }
-  prey.sort((a, b) => a.root.position.distanceTo(pet.pos) - b.root.position.distanceTo(pet.pos));
-  const it = prey[0];
-  ring(it.root.position);
-  if (brain.food && brain.food !== it) brain.food.claimed = false;
-  say('hunt', { cool: 5 });
-  it.given = true;              // she treats it as "for me" from now on
-  fetchFood(it, true);
+/** The screen goes dark; once it is, the night passes (nightPasses) and the morning summary opens. */
+function startSleep(passedOut) {
+  closePanel();
+  Object.assign(her, { mode: 'sleep', sleepT: 0, passedOut, slept: false, queue: [], order: null, job: null });
+  pet.hop = null; keys.clear();
+  $('#fade').classList.add('on');
+  if (!passedOut) Sound.night();
 }
-function fetchFood(it, urgent = true) {
-  brain.food = it; it.claimed = true;
-  go(it.root.position.clone(), 'food', urgent);
+function nightPasses() {
+  const due = S.pests.due < 0 ? pestsDue(S) : S.pests.due;
+  const r = endDay(S, { passedOut: her.passedOut, pending: pests().length + Math.max(0, due - S.pests.came) });
+  // by morning the night's creatures are gone, the field shows the night's work, and the fed hens have laid
+  for (const it of world.items) scene.remove(it.root);
+  for (const v of world.vanishing) scene.remove(v.it.root);
+  world.items = []; world.vanishing = [];
+  for (const p of r.reverted) removePlot(p);
+  S.plots.forEach(drawPlot);
+  layEggs(r.eggs); showTrough();
+  S.night = isNight(S.hour); phase.n = S.night ? 1 : 0; applyPhase(phase.n);
+  pet.pos.set(HOUSE_DOOR.x, groundY(HOUSE_DOOR.x, HOUSE_DOOR.z), HOUSE_DOOR.z); pet.heading = faceCamAngle(); pet.faceTo = pet.heading;
+  Box.pet.hop = null; Box.pet.pos.set(HOUSE_DOOR.x + 1.4, groundY(HOUSE_DOOR.x + 1.4, HOUSE_DOOR.z + 0.6), HOUSE_DOOR.z + 0.6);
+  world.spawnAt = 1; world.pestAt = rand(3, 6);
+  for (let i = 0; i < 3; i++) spawnSprout(true);
+  save();
+  $('#fade').classList.remove('on');                    // the morning shows behind the summary
+  openSummary(r, S, () => {
+    her.mode = 'idle'; Sound.wake(); say(r.passedOut ? 'wokeSore' : 'morning', { force: true });
+    later(3, () => boxReact('morning', 0.6));
+    checkGoals();
+  });
 }
-
-/** She ate a bug: for now it does nothing for her, the Box just has something to say about it. */
-function eaten() {
-  setTimeout(() => boxReact('eat', 0.5), 700);
-  refreshUI();
+/** Goals just reached: a toast, a cheer, and their coins. */
+function checkGoals() {
+  for (const g of reached(S)) {
+    toast(fill(UI.goal.reached, { goal: UI.goals[g.id] }) + (g.reward ? ` ${fill(UI.goal.reward, { n: g.reward })}` : ''), 'goal');
+    Sound.wake();
+    if (her.mode === 'idle' && !pet.airborne && !panelOpen()) pet.play('cheer', 2.4, true);
+    say('goal', { cool: 6 });
+  }
 }
+/** What the stall panel tells the game when she trades. */
+const STALL_EVENTS = {
+  sold(coins) {
+    if (!coins) return;
+    Sound.coin(); toast(fill(UI.plusCoins, { n: coins }), 'coins'); say('sold', { cool: 8 }); boxReact('sold', 0.3);
+    checkGoals(); save();
+  },
+  bought(o) {
+    Sound.coin();
+    if (o.id === 'hen') { syncHens(); showTrough(); say('newHen', { force: true }); }
+    else if (o.id === 'bigCan' || o.id === 'steelShovel') say('upgrade', { force: true });
+    else say('bought', { cool: 8 });
+    checkGoals(); save();
+  },
+};
 
-/** Food from the farm heals her a little (the `food` numbers in settings.js). */
-function heal(n) { S.health = clamp(S.health + n, 0, 1); }
+/** Sets the time of day (for testing: yaga.setHour(21) for night). */
+function setHour(h) { S.hour = clamp(h, WAKE, PASS_OUT - 0.01); }
 
 /* ───────────── talking: the homepage's typewriter cloud, in the pet's own voice ───────────── */
 function gibber() {
@@ -2107,23 +2146,16 @@ function pokeTalk() {
     Talk.lock = t + 13.6; Talk.clicks = 0;
   } else say(null, { force: true, text: line, dur: 2.2 });
 }
-// jaw flap while the text types out (−1 shut … 1 wide)
-function talkFlap(t) {
-  const u = t - Talk.t0, end = 0.32 + Talk.text.length / 26;
-  if (u < 0.3 || u > end || u > Talk.dur) return null;
-  return -0.35 + 0.95 * (0.5 - 0.5 * Math.cos((u - 0.3) * Math.PI * 2 * 6.5));
-}
 function tickTalk(t) {
-  if (Talk.boot && t > 1.4) { const b = Talk.boot; Talk.boot = null; if (brain.mode !== 'sleep') say(null, { text: b, force: true }); }
+  if (Talk.boot && t > 1.4) { const b = Talk.boot; Talk.boot = null; say(null, { text: b, force: true }); }
   if (!talking() && Talk.q.length) { const q = Talk.q.shift(); showLine(q.text, q.dur, q.gib); }
   else if (!talking() && t > Talk.next && t > Talk.lock) {
     Talk.next = t + rand(9, 16);
-    const m = brain.mode;
-    if (m === 'sleep' || m === 'nap') { if (Math.random() < 0.3) say(null, { text: UI.napPrefix + gibber(), gib: true }); }
-    else if (m === 'idle' || m === 'travel') {
+    const m = her.mode;
+    if (m === 'rest') { if (Math.random() < 0.3) say(null, { text: UI.napPrefix + gibber(), gib: true }); }
+    else if (m === 'idle' || m === 'walk') {
       if (t - Talk.inputAt > 25 && Talk.idleN < 3) { if (say('idle')) Talk.idleN++; }
-      else if (S.health < 0.35) say('sick');
-      else if (S.energy < 0.28) say('sleepy');
+      else if (S.stamina < 0.2) say('sleepy');
       else if (Math.random() < 0.45) say(null, { text: gibber(), gib: true });
     }
   }
@@ -2197,7 +2229,8 @@ function boxReact(kind, chance = 1) {
   if (!Box.pet || Box.dialog.length || boxTalking() || Math.random() > chance) return;
   boxSay(pick(BOX_LINES[kind]));
   const b = Box.pet;
-  if (kind === 'eat') boxMood('grumpy', 2.5);
+  if (kind === 'pest' || kind === 'rest') boxMood('grumpy', 2.5);
+  if (kind === 'sold' || kind === 'harvest') boxMood('grin', 2);
   if (kind === 'yagaPoked') { boxMood('grin', 2.5); b.startHop(b.pos.x, b.pos.z, { h: 0.5, ant: 0.1 }); }
   if (kind === 'dance') boxMood('oh', 1.5);
 }
@@ -2214,7 +2247,7 @@ function tickDialog(t) {
     say(null, { force: true, text });
     Talk.side = pet.pos.x >= Box.pet.pos.x ? 1 : -1;
     dur = Talk.dur;
-    if (brain.mode === 'idle' && !pet.airborne) {
+    if (her.mode === 'idle' && !pet.airborne) {
       pet.faceTo = Math.atan2(Box.pet.pos.x - pet.pos.x, Box.pet.pos.z - pet.pos.z);
       pet.play(pick(YAGA_ARGUE), dur);
     }
@@ -2233,7 +2266,7 @@ function pokeBox() {
   boxMood(riled ? 'snarl' : 'oh', 1.4); Box.shakeUntil = riled ? t + 0.5 : 0;
   Box.dialog = [];
   boxSay(pick(BOX_LINES.poked), 2.2);
-  if (Math.random() < 0.4 && brain.mode === 'idle') setTimeout(() => say(null, { force: true, text: pick(DEFEND) }), 1300);
+  if (Math.random() < 0.4 && her.mode === 'idle') later(1.3, () => say(null, { force: true, text: pick(DEFEND) }));
 }
 function hitBoxPet() { return Box.pet ? ray.intersectObject(Box.pet.proxy, false)[0] || null : null; }
 
@@ -2256,7 +2289,7 @@ function tickBox(dt) {
       if (t > Box.nextHop) { Box.nextHop = t + rand(6, 12); if (Math.random() < 0.5) b.startHop(b.pos.x, b.pos.z, { h: 0.45, ant: 0.12 }); }
     }
   }
-  if (t > Box.nextArgue && brain.mode === 'idle' && !pet.airborne && d < 4.5 && !talking() && !boxTalking() && t > Talk.lock) {
+  if (t > Box.nextArgue && her.mode === 'idle' && !pet.airborne && d < 4.5 && !talking() && !boxTalking() && t > Talk.lock) {
     argue(); Box.nextArgue = t + rand(28, 45);
   }
   tickDialog(t);
@@ -2273,13 +2306,36 @@ function tickBoxTalk(t) {
   renderCloud(BoxTalk, BOXSAY, head, t);
 }
 
+/* ───────────── poking and stroking her (just for fun: it never gives her orders) ───────────── */
+function poke() {
+  const t = clock.t;
+  pet.pokeAt = t; her.lastPoke = t;
+  her.pokes = her.pokes.filter((p) => t - p < 5); her.pokes.push(t);
+  if (her.mode === 'rest' || her.mode === 'sleep' || her.mode === 'faint') { Sound.grumble(); say('sleep_poke', { force: true, cool: 2.5 }); return; }
+  pet.startleAt = t; pet.st.puffV += 9;
+  Sound.squeak();
+  if (her.mode === 'idle' && !pet.airborne) {
+    pet.faceTo = faceCamAngle();
+    if (her.pokes.length < 3 && Math.random() < 0.5) later(0.18, () => happyHop(Math.random() < 0.4));
+    else pet.play('hit_to_body_01', 1.0, true);
+  }
+  pokeTalk();
+  later(1.5, () => boxReact('yagaPoked', 0.5));
+}
+function happyHop(big = false) {
+  if (big) boxReact('dance', 0.35);
+  if (pet.airborne || her.mode !== 'idle') return;
+  pet.startHop(pet.pos.x, pet.pos.z, { h: big ? 0.95 : 0.6, big, ant: 0.12 });
+}
+
 /* ───────────── input ───────────── */
-const ptr = { down: false, id: null, x0: 0, y0: 0, t0: 0, onPet: false, moved: 0, groundAt: -1e9, groundX: 0, groundY: 0, last: new THREE.Vector2(), lastT: 0, heartAt: 0, purrAt: 0, hx: 0, hy: 0, hoverAt: -99, nearT: 0 };
+const ptr = { down: false, id: null, x0: 0, y0: 0, t0: 0, onPet: false, moved: 0, groundAt: -1e9, groundX: 0, groundY: 0, last: new THREE.Vector2(), lastT: 0, heartAt: 0, purrAt: 0, hx: 0, hy: 0, hoverAt: -99, nearT: 0, planAt: 0, hoverPlan: null };
 const hoverV = new THREE.Vector3();
-// desktop: the eyes follow the cursor; it widens its eyes as you get close
+// desktop: her eyes follow the cursor; and what a click would do under it, worked out ten times a second
 function tickHover(dt) {
   let near = 0; pet.hover = null;
-  if (!MOBILE && !ptr.down && clock.t - ptr.hoverAt < 3) {
+  const hovering = !MOBILE && !ptr.down && clock.t - ptr.hoverAt < 3;
+  if (hovering) {
     toNdc({ clientX: ptr.hx, clientY: ptr.hy });
     const c = pet.pos.clone(); c.y += 1.07 * pet.squash.scale.y;
     const d = camera.position.distanceTo(c);
@@ -2290,7 +2346,13 @@ function tickHover(dt) {
   }
   pet.near = ease(pet.near, near, 5, dt);
   ptr.nearT = near > 0.85 ? ptr.nearT + dt : 0;
-  if (ptr.nearT > 2.2 && brain.mode !== 'sleep') { ptr.nearT = 0; say('hover', { cool: 45 }); }
+  if (ptr.nearT > 2.2 && her.mode !== 'sleep') { ptr.nearT = 0; say('hover', { cool: 45 }); }
+  if (!hovering || panelOpen() || her.mode === 'sleep') { ptr.hoverPlan = null; return; }
+  if (performance.now() < ptr.planAt) return;            // real time, so a slow frame rate doesn't leave it stale
+  ptr.planAt = performance.now() + 100;
+  const o = planFor(pickTarget()), onUs = (!o || o.act === 'walk') && (hitPet() || hitBoxPet());
+  ptr.hoverPlan = onUs ? null : o;
+  renderer.domElement.style.cursor = onUs || (o && o.act !== 'walk') ? 'pointer' : '';
 }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function toNdc(e) {
@@ -2304,45 +2366,43 @@ function hitGround() {
   const h = ray.intersectObject(world.terrain.solid, false)[0];
   return h ? h.point.addScaledVector(h.face.normal, -0.05) : null;
 }
-function hitItem(list) {
-  const hits = ray.intersectObjects(list.map((i) => i.root), true);
-  if (!hits.length) return null;
-  let o = hits[0].object; while (o && !o.userData.item) o = o.parent;
-  return o ? o.userData.item : null;
+/** What the ray points at: a thing (a bug or pest, an egg, a hen, a crop, the stall, the well, the trough, the hut)
+ *  or else a block of ground. Everything pickable carries userData.pick = { kind, ref }. */
+function pickTarget() {
+  const roots = [...world.items.filter((i) => i.grow >= 1).map((i) => i.root), ...S.eggs.map((e) => e.root), ...world.hens.map((h) => h.root),
+    ...S.plots.map((p) => p.view?.root).filter(Boolean), world.stall.group, world.well.group, world.trough.group, world.house.root];
+  const h = ray.intersectObjects(roots, true)[0];
+  const pk = h?.object.userData.pick;
+  if (pk) {
+    const r = pk.ref, at = r?.root ? r.root.position : r && Number.isFinite(r.x) ? r : h.point;
+    return { kind: pk.kind, ref: r, x: at.x, z: at.z };
+  }
+  const g = hitGround();
+  return g ? { kind: 'ground', x: g.x, z: g.z } : null;
 }
 function onDown(e) {
   Sound.init(); noteInput();
   toNdc(e);
   Object.assign(ptr, { down: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: 0, onPet: false });
   ptr.last.set(e.clientX, e.clientY); ptr.lastT = performance.now();
-  if (hitBoxPet()) return pokeBox();
-  if (hitHouse()) { world.house.stompAt = clock.t; ring(new THREE.Vector3(HOUSE_DOOR.x, 0, HOUSE_DOOR.z)); if (!BUSY.includes(brain.mode)) goHome(false); return; }
-  const hp = hitPet();
+  // she (or the Box) often stands in front of the block a tap means: the tool's work there comes first, a poke second
+  const o = planFor(pickTarget()), work = o && o.act !== 'walk';
+  if (!work && hitBoxPet()) return pokeBox();
+  const hp = !work && hitPet();
   if (hp) { ptr.onPet = true; renderer.domElement.setPointerCapture?.(e.pointerId); touchAt(hp, 0, 0); return; }
-  const food = hitItem(world.items.filter((i) => i.state === 'rest'));
-  if (food && food.hostile) return tapFoe(food);         // an enemy, not a snack
-  const egg = hitEgg();
-  if (egg) return tapEgg(egg);
-  const hen = hitHen();
-  if (hen) return petHen(hen);
-  if (food) {
-    if (brain.mode === 'sleep') return poke();
-    if (BUSY.includes(brain.mode)) return;
-    if (brain.food && brain.food !== food) brain.food.claimed = false;
-    ring(food.root.position); food.given = true;
-    return fetchFood(food, true);
+  if (!o) return;
+  let run = false;
+  if (o.act === 'walk') {                          // a second tap on the ground, quick and close: run
+    const now = performance.now();
+    run = now - ptr.groundAt < DOUBLE_TAP.ms && Math.hypot(e.clientX - ptr.groundX, e.clientY - ptr.groundY) < DOUBLE_TAP.px;
+    Object.assign(ptr, { groundAt: run ? -1e9 : now, groundX: e.clientX, groundY: e.clientY });
   }
-  const hit = hitGround();
-  if (!hit) return;
-  if (brain.mode === 'sleep') return poke();
-  if (S.tool === 'shovel') return tapShovel(hit);
-  const s = resolveSpot(hit.x, hit.z);
-  ring(new THREE.Vector3(s.x, groundY(s.x, s.z), s.z));
-  if (BUSY.includes(brain.mode)) return;
-  const now = performance.now(), run = now - ptr.groundAt < DOUBLE_TAP.ms && Math.hypot(e.clientX - ptr.groundX, e.clientY - ptr.groundY) < DOUBLE_TAP.px;
-  Object.assign(ptr, { groundAt: run ? -1e9 : now, groundX: e.clientX, groundY: e.clientY });
-  if (!run && Math.hypot(s.x - pet.pos.x, s.z - pet.pos.z) > 3 && Math.random() < 0.5) say('summon', { cool: 10 });
-  go(new THREE.Vector3(s.x, 0, s.z), 'summon', run);
+  if (o.act === 'bed') world.house.stompAt = clock.t;
+  if (!command(o, run)) return;
+  if (o.act === 'walk') {
+    ring(new THREE.Vector3(o.x, groundY(o.x, o.z), o.z));
+    if (!run && Math.hypot(o.x - pet.pos.x, o.z - pet.pos.z) > 3 && Math.random() < 0.3) say('summon', { cool: 12 });
+  } else flashTip(o, 1.0);
 }
 function touchAt(hit, vx, vy) {
   pet.creature.worldToLocal(pet.touch.local.copy(hit.point));
@@ -2352,11 +2412,7 @@ function touchAt(hit, vx, vy) {
 }
 function onMove(e) {
   ptr.hx = e.clientX; ptr.hy = e.clientY; ptr.hoverAt = clock.t;
-  if (!ptr.down) {
-    if (!MOBILE) { toNdc(e); renderer.domElement.style.cursor = hitPet() || hitItem(world.items.filter((i) => i.state === 'rest')) ? 'pointer' : ''; moveCellMark(); }
-    return;
-  }
-  if (e.pointerId !== ptr.id || !ptr.onPet) return;
+  if (!ptr.down || e.pointerId !== ptr.id || !ptr.onPet) return;
   toNdc(e);
   const now = performance.now(), dtp = Math.max(1, now - ptr.lastT);
   const vx = (e.clientX - ptr.last.x) / dtp * 16, vy = (e.clientY - ptr.last.y) / dtp * 16;
@@ -2365,8 +2421,8 @@ function onMove(e) {
   const hp = hitPet();
   if (!hp) { pet.touch.on = false; return; }
   touchAt(hp, vx, vy);
-  if (ptr.moved > 14) {                    // stroking the fur
-    brain.contentUntil = clock.t + 0.7;
+  if (ptr.moved > 14) {                    // stroking her hair
+    her.contentUntil = clock.t + 0.7;
     if (now - ptr.heartAt > 380) { ptr.heartAt = now; heart(e.clientX, e.clientY); }
     if (now - ptr.purrAt > 300) { ptr.purrAt = now; Sound.purr(); }
     say('pet', { cool: 10 });
@@ -2379,8 +2435,77 @@ function onUp(e) {
   ptr.onPet = false;
 }
 
+/* ───────────── the tile highlight: what a tap does, and where ───────────── */
+// Desktop: a square on the block under the cursor (gold: her tool works there, red: it can't, faint: she just walks)
+// with a label beside it. Phones: the same square on what she is on her way to do, and the label for a moment after a tap.
+// Orders waiting in her queue get a square outline each.
+let cellMark;
+const queueMarks = [], MARK_COL = { act: 0xD6A446, walk: 0xF0EADC, no: 0xC8442F, info: 0xF0EADC };
+function makeCellMarks() {
+  cellMark = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.45, depthWrite: false }));
+  cellMark.rotation.x = -Math.PI / 2; cellMark.visible = false; scene.add(cellMark);
+  const outline = new THREE.RingGeometry(0.21, 0.27, 4, 1, Math.PI / 4); outline.rotateX(-Math.PI / 2);
+  for (let i = 0; i <= QUEUE_MAX; i++) {
+    const m = new THREE.Mesh(outline, new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.75, depthWrite: false }));
+    m.visible = false; scene.add(m); queueMarks.push(m);
+  }
+}
+const planKind = (o) => (o.no ? (o.info ? 'info' : 'no') : o.act === 'walk' ? 'walk' : 'act');
+const markPos = (o) => (o.chase && o.ref?.root ? o.ref.root.position : { x: o.x, z: o.z });
+function markAt(m, o, kind) {
+  const p = markPos(o);
+  m.position.set(p.x, groundY(p.x, p.z) + 0.03, p.z); m.material.color.setHex(MARK_COL[kind]); m.visible = true;
+}
+const tipEl = $('#tileTip');
+let tipPlan = null, tipUntil = 0;
+/** Shows a plan's label beside its target for a moment. */
+function flashTip(o, secs) { tipPlan = o; tipUntil = clock.t + secs; if (o.no && !o.info) note(planLabel(o)); }
+function tickMarks() {
+  const cur = her.job?.o || her.order, hov = ptr.hoverPlan;
+  const main = hov || (MOBILE ? cur : null);
+  cellMark.visible = false;
+  if (main && !main.spot && main.act !== 'nothing') {
+    markAt(cellMark, main, planKind(main));
+    cellMark.material.opacity = planKind(main) === 'walk' ? 0.14 : 0.45;
+  }
+  const waiting = [...(cur && !MOBILE ? [cur] : []), ...her.queue].filter((o) => o.act !== 'walk' && !o.spot);
+  queueMarks.forEach((m, i) => { if (waiting[i]) markAt(m, waiting[i], 'act'); else m.visible = false; });
+  const o = hov && hov.act !== 'walk' ? hov : clock.t < tipUntil ? tipPlan : null;
+  tipEl.hidden = !o;
+  if (!o) return;
+  const p = markPos(o), s = screenOf(new THREE.Vector3(p.x, groundY(p.x, p.z) + (o.spot ? 1.6 : 0.4), p.z));
+  const text = o.act === 'nothing' ? UI.act.nothing : planLabel(o);
+  if (tipEl.textContent !== text) tipEl.textContent = text;
+  tipEl.className = planKind(o);
+  tipEl.style.transform = `translate(${Math.round(clamp(s.x + 14, 8, innerWidth - tipEl.offsetWidth - 8))}px, ${Math.round(s.y - 30)}px)`;
+}
+
+/* ───────────── dirt clods and water drops ───────────── */
 const DIRT_GEO = new THREE.IcosahedronGeometry(1, 1);
 const DIRT_MAT = new THREE.MeshStandardMaterial({ name: 'M_Dirt', color: 0x5a4030, roughness: 1, flatShading: true });
+const DROP_MAT = new THREE.MeshStandardMaterial({ name: 'M_Drop', color: 0x8fc3d8, roughness: 0.2, transparent: true, opacity: 0.85, emissive: 0x2c4f55, emissiveIntensity: 0.4 });
+/** A sparkle over a block, where the crop is. */
+function sparkleAt(x, z) {
+  const s = screenOf(new THREE.Vector3(x, groundY(x, z) + 0.3, z)); sparkle(s.x, s.y);
+}
+/** A few clods fly up where a tool hit. */
+function dirtBurst(x, z, n) {
+  const y = groundY(x, z);
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(DIRT_GEO, DIRT_MAT); m.scale.setScalar(rand(0.04, 0.09)); m.castShadow = true;
+    m.position.set(x + rand(-0.15, 0.15), y + 0.1, z + rand(-0.15, 0.15)); scene.add(m);
+    world.clods.push({ m, v: new THREE.Vector3(rand(-1.1, 1.1), rand(2.2, 3.6), rand(-1.1, 1.1)), spin: rand(-12, 12), dead: 0, floor: y + 0.02 });
+  }
+}
+/** Water drops rain on a block from the can (or splash up from the well as she fills it). */
+function dropBurst(x, z, n, up = false) {
+  const y = groundY(x, z);
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(DIRT_GEO, DROP_MAT); m.scale.setScalar(rand(0.025, 0.045));
+    m.position.set(x + rand(-0.18, 0.18), y + (up ? 0.5 : 0.75), z + rand(-0.18, 0.18)); scene.add(m);
+    world.clods.push({ m, v: new THREE.Vector3(rand(-0.4, 0.4), up ? rand(1.5, 2.5) : rand(-0.5, 0.4), rand(-0.4, 0.4)), spin: 0, dead: 0, floor: y + 0.02 });
+  }
+}
 function tickClods(dt) {
   for (const c of world.clods) {
     if (c.dead) { c.dead += dt; c.m.scale.multiplyScalar(Math.max(0, 1 - dt * 5)); continue; }
@@ -2404,66 +2529,49 @@ function tickMarker(dt) {
   if (markerLife <= 0) markerMesh.visible = false;
 }
 
-/* ───────────── icons: live 3D thumbnails of the props ───────────── */
-function makeIcons() {
-  const r = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  r.setPixelRatio(1); r.setSize(104, 104, false);
+/* ───────────── icons: small pictures of the items and tools, drawn once at boot from their own models ───────────── */
+function makeIcons(broomScene) {
+  const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(96, 96, false);
   r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
-  const make = (kind) => {
-    const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xFFF1E0, 0x7a4a2e, 1.5));
-    const k = new THREE.DirectionalLight(0xFFF3DE, 2.4); k.position.set(-2, 3.5, 3); scene.add(k);
-    const rm = new THREE.DirectionalLight(0xFFC98A, 0.9); rm.position.set(2.5, 1.5, -3); scene.add(rm);
-    const bug = world.models[kind].make();
-    const pivot = new THREE.Group(), obj = bug.group;
-    obj.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
-    const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
-    const s = 1 / (Math.max(size.x, size.y, size.z) || 1);
-    obj.position.sub(c).multiplyScalar(s); obj.scale.multiplyScalar(s);
-    pivot.add(obj); scene.add(pivot);
-    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(0, 1.2, 2.3); cam.lookAt(0, 0, 0);
-    return { scene, cam, pivot, bug };
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xFFF1E0, 0x7a4a2e, 1.5));
+  const k = new THREE.DirectionalLight(0xFFF3DE, 2.4); k.position.set(-2, 3.5, 3); sc.add(k);
+  const rm = new THREE.DirectionalLight(0xFFC98A, 0.9); rm.position.set(2.5, 1.5, -3); sc.add(rm);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(0, 1.0, 2.6); cam.lookAt(0, 0, 0);
+  /** One picture: the model turned a little, fitted to the frame. */
+  const snap = (obj, tilt = 0, spin = 0.5) => {
+    const pivot = new THREE.Group(), inner = new THREE.Group();
+    obj.visible = true; inner.add(obj); inner.rotation.set(0, spin, tilt); pivot.add(inner); pivot.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(pivot), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    const s = 1.15 / (Math.max(size.x, size.y, size.z) || 1);
+    pivot.scale.setScalar(s); pivot.position.copy(c).multiplyScalar(-s);
+    sc.add(pivot); r.render(sc, cam); sc.remove(pivot);
+    return r.domElement.toDataURL();
   };
-  const scenes = {}; FOODS.forEach((k) => (scenes[k] = make(k)));
-  const targets = [];
-  document.querySelectorAll('.care.food').forEach((b) => targets.push({ kind: b.dataset.food, canvas: b.querySelector('canvas') }));
-  targets.forEach((tg) => (tg.ctx = tg.canvas.getContext('2d')));
-  const bubble = { canvas: $('#bubbleIcon'), kind: null }; bubble.ctx = bubble.canvas.getContext('2d');
-  let acc = 0;
-  const draw = (tg, spin) => {
-    const sc = scenes[tg.kind];
-    sc.pivot.rotation.y = spin;
-    r.render(sc.scene, sc.cam);
-    tg.ctx.clearRect(0, 0, tg.canvas.width, tg.canvas.height);
-    tg.ctx.drawImage(r.domElement, 0, 0, tg.canvas.width, tg.canvas.height);
-  };
-  return {
-    tick(dt, t) {
-      acc += dt; if (acc < 1 / 24) return; acc = 0;
-      Object.values(scenes).forEach((s, i) => s.bug.tick(t + i * 3, 0.55));
-      targets.forEach((tg, i) => draw(tg, t * 0.55 + i));
-      if (bubble.kind) draw(bubble, Math.sin(t * 1.3) * 0.6);
-    },
-    bubble,
-  };
+  const out = {}, bagOf = { pumpkin: 0, cabbage: 1 };
+  for (const c of CROP_KINDS) { out[c] = snap(makeCrop(c, 2)); out[`seed:${c}`] = snap(makeSeedBag(bagOf[c] ?? 0).group); }
+  out.egg = snap(makeEgg(), 0.3);
+  out.feed = snap(makeSeedBag(2).group);
+  out.hen = snap(makeChicken(0).group, 0, 0.9);
+  for (const b of FRIENDLY) out[`bug:${b}`] = snap(makeBug(THREE, b).group, 0, 0.9);
+  out.shovel = out.steelShovel = snap(makeShovel().group, -Math.PI / 4, 0.3);
+  out.can = out.bigCan = snap(makeCan().group, 0, -1.2);
+  out.broom = snap(broomScene.clone(), -Math.PI / 4, 0.3);
+  r.dispose(); r.forceContextLoss();
+  return out;
 }
 
-/* ───────────── HUD: bubble, badges, effects ───────────── */
-const fx = $('#fx'), bubbleEl = $('#bubble');
-let need = null, needShown = null;
+/* ───────────── HUD: coins and bars, the bag and goal pills, the hotbar, the hint line ───────────── */
+const fx = $('#fx');
 function screenOf(v) {
   const p = v.clone().project(camera);
   return { x: (p.x * 0.5 + 0.5) * (stage.clientWidth || innerWidth), y: (-p.y * 0.5 + 0.5) * (stage.clientHeight || innerHeight), behind: p.z > 1 };
 }
-function currentNeed() {
-  if (brain.mode === 'sleep' || brain.mode === 'nap') return null;
-  if (brain.mode === 'eat') return null;
-  if (S.energy < 0.28) return 'moon';
-  return null;
-}
-const vitalEls = { health: $('#vitalHealth'), mana: $('#vitalMana'), stamina: $('#vitalStamina') };
-const toolEls = [...document.querySelectorAll('.tool')];
-/** One bar of the bottom hotbar: the fill, the aria value, and a pulse when it runs low. */
+const vitalEls = { mana: $('#vitalMana'), stamina: $('#vitalStamina') };
+const slotEls = [...document.querySelectorAll('.slot')];
+const hud = { coins: -1, bag: -1, goal: null, slots: '', msg: '', msgUntil: 0 };
+/** One bar: the fill, the aria value, and a pulse when it runs low. */
 function setVital(el, v) {
   const pct = Math.round(clamp(v, 0, 1) * 100);
   if (el._p === pct) return;
@@ -2473,62 +2581,45 @@ function setVital(el, v) {
   el.setAttribute('aria-valuenow', String(pct));
 }
 /** Marks the tool in her hand on the hotbar. */
-function showTool() { for (const b of toolEls) b.setAttribute('aria-checked', String(b.dataset.tool === S.tool)); }
-/** Puts the broom or the shovel in her hand. */
+function showTool() { for (const b of slotEls) b.setAttribute('aria-checked', String(b.dataset.tool === S.tool)); }
+/** Puts a tool in her hand (one of TOOLS). */
 function setTool(name) {
-  if (S.tool === name) return;
-  S.tool = name; showTool(); pet.holds(name); cellMark.visible = false; Sound.equip(); save();
+  if (!TOOLS.includes(name) || S.tool === name) return;
+  S.tool = name; showTool(); pet.holds(name); Sound.equip(); ptr.planAt = 0; save();
 }
-function tickStats() {
-  setVital(vitalEls.health, S.health); setVital(vitalEls.mana, S.mana); setVital(vitalEls.stamina, S.energy);
-}
+/** A message on the hint line for a few seconds (why she can't do something). */
+function note(text, secs = 3) { hud.msg = text; hud.msgUntil = clock.t + secs; }
 function tickHUD() {
-  tickStats();
-  tickTray();
+  setVital(vitalEls.stamina, S.stamina); setVital(vitalEls.mana, S.mana);
+  if (hud.coins !== S.coins) {
+    const el = $('#coins');
+    if (hud.coins >= 0) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+    hud.coins = S.coins; $('#coinsN').textContent = S.coins;
+  }
+  const bag = Object.values(S.inv).reduce((a, b) => a + b, 0);
+  if (hud.bag !== bag) { hud.bag = bag; $('#bagN').textContent = bag; }
+  const g = nextGoal(S), gt = g ? fill(UI.goal.next, { goal: UI.goals[g.id] }) : UI.goal.allDone;
+  if (hud.goal !== gt) { hud.goal = gt; $('#goalText').textContent = gt; }
+  const slots = `${S.can}/${count(S, 'seed:pumpkin')}/${count(S, 'seed:cabbage')}`;
+  if (hud.slots !== slots) {
+    hud.slots = slots;
+    for (const b of slotEls) {
+      const c = b.querySelector('.count'); if (!c) continue;
+      const n = b.dataset.tool === 'can' ? S.can : count(S, b.dataset.tool);
+      c.textContent = n; c.classList.toggle('empty', !n);
+    }
+  }
   tickClock();
-  const n = currentNeed();
-  if (n !== need) {
-    need = n;
-    if (n) {
-      show($('#bubbleMoon'), n === 'moon');
-      show($('#bubbleIcon'), n !== 'moon');
-      iconKit.bubble.kind = n === 'moon' ? null : n;
-    } else iconKit.bubble.kind = null;
-    needShown = undefined;
-    refreshUI();
-  }
-  const want = Talk.vis ? null : need;      // the speech cloud gets the head while it talks
-  if (want !== needShown) {
-    needShown = want; bubbleEl.hidden = !want;
-    if (want) { bubbleEl.classList.remove('pop'); void bubbleEl.offsetWidth; bubbleEl.classList.add('pop'); }
-  }
-  if (needShown) {
-    const head = pet.pos.clone(); head.y += 2.2 * pet.squash.scale.y;
-    const s = screenOf(head), W = stage.clientWidth || innerWidth;
-    const bw = bubbleEl.offsetWidth || 80, bh = bubbleEl.offsetHeight || 72;
-    let x = s.x + 16, y = s.y - bh - 18;
-    if (x + bw > W - 12) x = s.x - bw - 16;
-    x = clamp(x, 10, W - bw - 10); y = Math.max(y, 70);
-    bubbleEl.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-  }
-}
-// the tray shows what's alive out there right now
-let trayShown = '';
-function tickTray() {
-  const counts = FOODS.map((k) => aliveBugs(k).length);
-  const key = counts.join(',') + '|' + S.night;
-  if (key === trayShown) return;
-  trayShown = key;
-  document.querySelectorAll('.care.food').forEach((b) => {
-    const n = counts[FOODS.indexOf(b.dataset.food)] || 0, bug = BUG[b.dataset.food];
-    b.querySelector('.count').textContent = n;
-    b.classList.toggle('dim', n === 0);
-    b.setAttribute('aria-label', n ? fill(UI.trayHunt, { a: bug.a, n }) : fill(UI.trayNone, { plural: bug.plural }));
-  });
+  // the hint line: a refusal just now, a pest at the crops, she is resting, or what the tool in her hand does
+  const p = pests();
+  hint(clock.t < hud.msgUntil ? hud.msg
+    : her.mode === 'rest' ? fill(UI.resting, { n: Math.ceil(Math.max(0, her.restUntil - clock.t)) })
+    : p.length && S.tool !== 'broom' ? UI.pestHint
+    : UI.toolHint[S.tool]);
 }
 function refreshUI() {
-  trayShown = '';
-  tickTray(); showTool();
+  showTool();
+  for (const b of slotEls) { const img = b.querySelector('img'); if (img && icons[b.dataset.tool]) img.src = icons[b.dataset.tool]; }
   show($('#iconSoundOn'), Sound.on); show($('#iconSoundOff'), !Sound.on);
   $('#sound').setAttribute('aria-label', Sound.on ? UI.soundOff : UI.soundOn);    // the label names what a tap does
 }
@@ -2549,6 +2640,11 @@ function sparkle(x, y) {
     spawnFx('spark', x - 9, y - 9, STAR, { '--dx': `${(Math.cos(a) * d).toFixed(0)}px`, '--dy': `${(Math.sin(a) * d).toFixed(0)}px` });
   }
 }
+/** "+1 Pumpkin" rising from where she picked it up. */
+function plusFx(x, z, kind) {
+  const s = screenOf(new THREE.Vector3(x, groundY(x, z) + 0.6, z));
+  spawnFx('plus', s.x - 20, s.y - 20, escHtml(fill(UI.plusItem, { item: itemName(kind) })), { '--dx': '0px' });
+}
 function zz() {
   const head = pet.pos.clone(); head.y += YAGA_H;
   const s = screenOf(head);
@@ -2557,64 +2653,80 @@ function zz() {
 
 /** Scrolling zooms: out for a little more of the field, in towards a human view of her and the Box. */
 function onWheel(e) {
+  if (panelOpen()) return;
   e.preventDefault();
   zoomTarget = clamp(zoomTarget - e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015), ZOOM.min, ZOOM.max);
 }
-/** Keys 1 and 2 take the broom and the shovel. */
+const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+/** Keys: WASD or the arrows walk (Shift runs), 1–7 pick a tool, E or Space uses it on what is in front of her. */
 function onKey(e) {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-  const tool = { 1: 'broom', 2: 'shovel' }[e.key];
-  if (tool) { Sound.init(); noteInput(); setTool(tool); }
+  if (e.ctrlKey || e.metaKey || e.altKey || panelOpen()) return;
+  if (e.key === 'Shift') { keys.add('Shift'); return; }
+  if (MOVE_KEYS.includes(e.code)) { e.preventDefault(); keys.add(e.code); Sound.init(); noteInput(); return; }
+  if (e.repeat) return;
+  const n = Number(e.key);
+  if (n >= 1 && n <= TOOLS.length) { Sound.init(); noteInput(); setTool(TOOLS[n - 1]); return; }
+  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); Sound.init(); noteInput(); useFacing(); }
 }
+function onKeyUp(e) { keys.delete(e.code); if (e.key === 'Shift') keys.delete('Shift'); }
 function bindUI() {
   const el = renderer.domElement;
   addEventListener('wheel', onWheel, { passive: false });
   addEventListener('keydown', onKey);
-  toolEls.forEach((b) => b.addEventListener('click', () => { Sound.init(); noteInput(); setTool(b.dataset.tool); }));
+  addEventListener('keyup', onKeyUp);
+  addEventListener('blur', () => keys.clear());
+  slotEls.forEach((b) => b.addEventListener('click', () => { Sound.init(); noteInput(); setTool(b.dataset.tool); b.blur(); }));
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerup', onUp);
   el.addEventListener('pointercancel', onUp);
-  el.addEventListener('pointerleave', () => { ptr.hoverAt = -99; el.style.cursor = ''; cellMark.visible = false; });
-  document.querySelectorAll('.care.food').forEach((b) => b.addEventListener('click', () => {
-    Sound.init(); noteInput();
-    orderHunt(b.dataset.food);
-  }));
+  el.addEventListener('pointerleave', () => { ptr.hoverAt = -99; el.style.cursor = ''; });
   $('#sound').addEventListener('click', () => { Sound.init(); Sound.on = !Sound.on; S.sound = Sound.on; refreshUI(); save(); say(Sound.on ? 'unmute' : 'mute', { force: true }); });
+  $('#bagPill').addEventListener('click', () => { Sound.init(); openBag(S); });
+  $('#goalPill').addEventListener('click', () => { Sound.init(); openGoals(S); });
 }
 
-function setNight(on) {
-  if (S.night === on) return;
-  S.night = on;
-  if (on) { Sound.night(); say('night', { force: true }); setTimeout(() => boxReact('night', 0.6), 4500); }
-  else restoreFlock();
-  refreshUI(); save();
+/* ───────────── the day: the clock runs while she is up and no panel is open ───────────── */
+function tickDay(dt) {
+  if (paused()) return;
+  S.hour = Math.min(PASS_OUT, S.hour + dt / HOUR);
+  const night = isNight(S.hour);
+  if (night !== S.night) setNight(night);
+  if (S.hour >= PASS_OUT && her.mode !== 'faint' && her.mode !== 'sleep') passOut();
 }
-// the clock in the top right: 24h dial (noon at the top), digital time, countdown to the next switch
-const clockEl = { hand: $('#dialHand'), sun: $('#dialSun'), time: $('#clockTime'), next: $('#clockNext'), root: $('#clock') };
+function setNight(on) {
+  S.night = on;
+  if (on) {
+    Sound.night(); say('night', { force: true }); later(4.5, () => boxReact('night', 0.6));
+    if (S.pests.due < 0) S.pests.due = pestsDue(S);
+    toast(S.pests.due ? UI.nightPests : UI.nightQuiet);
+  }
+  save();
+}
+// the clock in the top right: 24h dial (noon at the top), the time, and the day's number
+const clockEl = { hand: $('#dialHand'), sun: $('#dialSun'), time: $('#clockTime'), day: $('#clockDay'), root: $('#clock') };
 let clockShown = '';
 function tickClock() {
-  const f = dayFrac();
-  if (isNightAt(f) !== S.night) setNight(isNightAt(f));
-  const mins = Math.floor(f * 1440), hh = String(Math.floor(mins / 60)).padStart(2, '0'), mm = String(Math.floor(mins % 60 / 10) * 10).padStart(2, '0');
+  const f = (S.hour % 24) / 24, time = clockText(S.hour);
   clockEl.hand.setAttribute('transform', `rotate(${((f - 0.5) * 360).toFixed(1)} 20 20)`);
-  const key = hh + mm + S.night;
-  const to = ((S.night ? DAWN : DUSK) - f + 1) % 1, secs = Math.ceil(to * DAY_LEN);
-  const nx = fill(UI.nextIn, { phase: S.night ? UI.day : UI.night, m: Math.floor(secs / 60), s: String(secs % 60).padStart(2, '0') });
-  if (clockEl.next.textContent !== nx) clockEl.next.textContent = nx;
+  const key = time + S.day + S.night;
   if (key === clockShown) return;
   clockShown = key;
-  clockEl.time.textContent = `${hh}:${mm}`;
+  clockEl.time.textContent = time;
+  clockEl.day.textContent = fill(UI.dayN, { n: S.day });
   clockEl.sun.setAttribute('fill', S.night ? '#F0EADC' : '#D6A446');
   clockEl.root.classList.toggle('night', S.night);
-  clockEl.root.setAttribute('aria-label', fill(UI.clockAria, { time: `${hh}:${mm}`, phase: S.night ? UI.night : UI.day, next: nx }));
+  clockEl.root.setAttribute('aria-label', fill(UI.clockAria, { time, day: S.day, phase: S.night ? UI.night : UI.day }));
 }
+
 /* ───────────── loop ───────────── */
 let last = performance.now(), lastTick = 0, drawnOnce = false;
+/** One step of the game: everything that plays, nothing that only draws. advance() runs just this; frame() runs it and draws. */
 function simulate(dt) {
   clock.t += dt; phase.cycleT += dt;
   phase.n = ease(phase.n, S.night ? 1 : 0, 1.4, dt);
-  tickBrain(dt);
+  tickTimers(); tickDay(dt);
+  tickHer(dt);
   pet.update(dt, clock.t, camera);
   if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
   tickBox(dt); Box.pet.update(dt, clock.t, camera);
@@ -2622,27 +2734,17 @@ function simulate(dt) {
   tickProps(dt); tickFarm(dt); tickHens(dt);
   tickMarker(dt);
 }
-function advance(sec) { for (let i = 0; i < sec * 30; i++) simulate(1 / 30); applyPhase(phase.n); tickHUD(); tickTalk(clock.t); tickBoxTalk(clock.t); renderer.render(scene, camera); }
+function advance(sec) { for (let i = 0; i < sec * 30; i++) simulate(1 / 30); applyPhase(phase.n); tickHUD(); tickMarks(); tickTalk(clock.t); tickBoxTalk(clock.t); renderer.render(scene, camera); }
 function frame() {
   const now = performance.now();
   const dt = Math.min(0.05, Math.max(1 / 240, (now - last) / 1000)); last = now; lastTick = now;
-  clock.t += dt; phase.cycleT += dt;
-  phase.n = ease(phase.n, S.night ? 1 : 0, 1.4, dt);
+  simulate(dt);
   applyPhase(phase.n);
   zoom = ease(zoom, zoomTarget, 7, dt);
   followCamera(1 - Math.exp(-2.2 * dt));
   tickHover(dt);
-  tickBrain(dt);
-  pet.update(dt, clock.t, camera);
-  // keep her inside the visible clearing between steps
-  if (!pet.airborne) { const c = clampXZ(pet.pos.x, pet.pos.z); pet.pos.x = c.x; pet.pos.z = c.z; }
-  tickBox(dt); Box.pet.update(dt, clock.t, camera);
-  if (!Box.pet.airborne) { const c = clampXZ(Box.pet.pos.x, Box.pet.pos.z); Box.pet.pos.x = c.x; Box.pet.pos.z = c.z; }
-  tickProps(dt); tickFarm(dt); tickHens(dt);
-  tickMarker(dt);
   tickHouse(dt, clock.t);
-  iconKit.tick(dt, clock.t);
-  tickHUD();
+  tickHUD(); tickMarks();
   tickTalk(clock.t);
   tickBoxTalk(clock.t);
   renderer.render(scene, camera);

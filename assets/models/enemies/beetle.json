@@ -1,5 +1,5 @@
 {
-  "about": "The jewel beetle. The big red monsters can be beetles too: the same model, made bigger (hostile.size in settings.js) with a red glow. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'legs' also colours its belly and antennae.",
+  "about": "The jewel beetle. The big red night pests can be beetles too: the same model, made bigger (pests.size in settings.js) with a red glow. 'size' scales the whole bug (1 = as designed; the game then draws every bug at 40% of its design size). Colours are hex. The shape itself is drawn in code/bug-models.js. Edit, save and reload the page. 'legs' also colours its belly and antennae.",
   "size": 1,
   "colours": {
     "shell": "#1FA57F",

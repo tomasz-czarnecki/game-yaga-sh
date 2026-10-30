@@ -1,0 +1,29 @@
+{
+  "about": "The well where she fills her watering can: a stone ring with a little roof and a bucket. About 1 m wide. Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you. Where it stands is in code/app.js (WELL).",
+  "defaults": { "roughness": 0.9, "glow": 0.05 },
+  "materials": {
+    "stone": { "colour": "#9a7a60" },
+    "stoneDark": { "colour": "#7d6350" },
+    "wood": { "colour": "#5a3a2a" },
+    "roof": { "colour": "#3a2a20" },
+    "water": { "colour": "#2c4f55", "roughness": 0.25, "glow": 0.15 }
+  },
+  "boxes": [
+    { "note": "wall, back", "size": [1.0, 0.6, 0.16], "material": "stone", "at": [0, 0.3, -0.42] },
+    { "note": "wall, front", "size": [1.0, 0.6, 0.16], "material": "stone", "at": [0, 0.3, 0.42] },
+    { "note": "wall, left", "size": [0.16, 0.6, 0.68], "material": "stone", "at": [-0.42, 0.3, 0] },
+    { "note": "wall, right", "size": [0.16, 0.6, 0.68], "material": "stone", "at": [0.42, 0.3, 0] },
+    { "note": "rim", "size": [1.06, 0.06, 0.2], "material": "stoneDark", "at": [0, 0.63, -0.42] },
+    { "note": "rim", "size": [1.06, 0.06, 0.2], "material": "stoneDark", "at": [0, 0.63, 0.42] },
+    { "note": "rim", "size": [0.2, 0.06, 0.66], "material": "stoneDark", "at": [-0.42, 0.63, 0] },
+    { "note": "rim", "size": [0.2, 0.06, 0.66], "material": "stoneDark", "at": [0.42, 0.63, 0] },
+    { "note": "water", "size": [0.7, 0.02, 0.7], "material": "water", "at": [0, 0.45, 0] },
+    { "note": "post", "size": [0.08, 1.35, 0.08], "material": "wood", "at": [-0.44, 1.25, 0] },
+    { "note": "post", "size": [0.08, 1.35, 0.08], "material": "wood", "at": [0.44, 1.25, 0] },
+    { "note": "winch", "size": [0.84, 0.06, 0.06], "material": "wood", "at": [0, 1.55, 0] },
+    { "note": "rope", "size": [0.02, 0.4, 0.02], "material": "wood", "at": [0, 1.33, 0] },
+    { "note": "bucket", "size": [0.16, 0.15, 0.16], "material": "wood", "at": [0, 1.07, 0] },
+    { "note": "roof, front", "size": [1.2, 0.05, 0.58], "material": "roof", "at": [0, 1.98, 0.22], "turn": [30, 0, 0] },
+    { "note": "roof, back", "size": [1.2, 0.05, 0.58], "material": "roof", "at": [0, 1.98, -0.22], "turn": [-30, 0, 0] }
+  ]
+}

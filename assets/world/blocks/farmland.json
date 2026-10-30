@@ -1,6 +1,8 @@
 {
-  "about": "Farmland: a block she has dug with the shovel. Its furrows alternate between 'top' and 'top2' by row. Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
-  "top": "#3b2b21",
-  "top2": "#2c2019",
+  "about": "Farmland: a block she has dug with the shovel. Its furrows alternate between 'top' and 'top2' by row; 'wet' and 'wet2' are the same once she has watered it today (the soil dries overnight). Colours are hex: 'top' is the top face, 'side' the sides you see where it stands above its neighbour. Edit, save and reload the page.",
+  "top": "#7a5a3c",
+  "top2": "#6a4d33",
+  "wet": "#2e2119",
+  "wet2": "#261b14",
   "side": "#2f261f"
 }

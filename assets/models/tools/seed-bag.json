@@ -1,0 +1,18 @@
+{
+  "about": "A small sack held at its tied neck: the grip is at the origin (her fist) and the bag hangs below it. 'variants' colour it per kind: 0 pumpkin seeds, 1 cabbage seeds, 2 hen feed (the code picks the number). Sizes and positions are in metres as [x across, y up, z forward]; turns are in degrees. A box's at is its middle, measured from its part. Edit, save and reload the page. A note is only a label for you.",
+  "defaults": { "roughness": 0.95, "glow": 0.05 },
+  "materials": {
+    "sack": { "colour": "#c9b48a" },
+    "string": { "colour": "#5a3a2a" },
+    "label": { "colour": "#d2762a" }
+  },
+  "variants": [{ "label": "#d2762a" }, { "label": "#9cba62" }, { "label": "#D6A446", "sack": "#a8916a" }],
+  "boxes": [
+    { "note": "tie", "size": [0.07, 0.035, 0.07], "material": "string", "at": [0, 0, 0] },
+    { "note": "neck", "size": [0.09, 0.07, 0.09], "material": "sack", "at": [0, -0.045, 0] },
+    { "note": "bag", "size": [0.22, 0.24, 0.16], "material": "sack", "at": [0, -0.19, 0] },
+    { "note": "bag, rounded", "size": [0.18, 0.2, 0.19], "material": "sack", "at": [0, -0.2, 0] },
+    { "note": "label, front", "size": [0.12, 0.1, 0.01], "material": "label", "at": [0, -0.19, 0.1] },
+    { "note": "label, back", "size": [0.12, 0.1, 0.01], "material": "label", "at": [0, -0.19, -0.1] }
+  ]
+}

@@ -15,6 +15,7 @@ export async function loadBlocks() {
   const [water, ...solid] = await Promise.all(['water', ...BLOCKS].map(read));
   PALETTE = Object.fromEntries(BLOCKS.map((name, i) => [name, {
     top: new THREE.Color(solid[i].top), top2: new THREE.Color(solid[i].top2 ?? solid[i].top), side: new THREE.Color(solid[i].side),
+    wet: new THREE.Color(solid[i].wet ?? solid[i].top), wet2: new THREE.Color(solid[i].wet2 ?? solid[i].wet ?? solid[i].top2 ?? solid[i].top),
   }]));
   WATER = { color: new THREE.Color(water.colour), opacity: water.opacity, drop: water.drop };   // surface sits `drop` below the shore
 }
@@ -143,6 +144,12 @@ export function groundY(x, z) {
   return k < 0 ? 0 : grid.top[k];
 }
 
+/** True over the pond: the watering can can be filled there. */
+export function isWater(x, z) {
+  const k = cellAt(x, z);
+  return k >= 0 && !Number.isNaN(grid.surface[k]);
+}
+
 /** The type of the block under a point ('dirt', 'grass', 'farmland'…; a pond's bed reads as 'sand'), '' beyond the map. */
 export function kindAt(x, z) {
   const k = cellAt(x, z);
@@ -156,11 +163,20 @@ export function blockCentre(x, z) {
 }
 
 /** Digs a block into farmland: its kind becomes 'farmland' and only its own four vertices are recoloured. */
-export function tillCell(x, z) {
+export function tillCell(x, z) { paintCell(x, z, 'farmland'); }
+
+/** Gives a dug block back to the map as `kind` (what it was before she dug it). */
+export function untillCell(x, z, kind) { paintCell(x, z, kind); }
+
+/** Shows farmland wet (watered today: darker) or dry. */
+export function wetCell(x, z, wet) { paintCell(x, z, 'farmland', wet); }
+
+function paintCell(x, z, name, wet = false) {
   const k = cellAt(x, z);
   if (k < 0) return;
-  grid.kind[k] = 'farmland';
-  const t = PALETTE.farmland, c = new THREE.Color().copy((((k / grid.cols) | 0) % 2) ? t.top2 : t.top).multiplyScalar(jitter(k, 1, 0.05));
+  grid.kind[k] = name;
+  const t = PALETTE[name], odd = ((k / grid.cols) | 0) % 2;
+  const c = new THREE.Color().copy(wet ? (odd ? t.wet2 : t.wet) : (odd ? t.top2 : t.top)).multiplyScalar(jitter(k, 1, 0.05));
   for (let v = 0; v < 4; v++) grid.colors.setXYZ(grid.topVert[k] + v, c.r, c.g, c.b);
   grid.colors.needsUpdate = true;
 }
