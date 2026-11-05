@@ -57,7 +57,7 @@ export function overnight(plots) {
   return r;
 }
 
-/** A crop at a growth stage, standing on the ground at the origin (a block is 0.5 m wide). Its boxes are in assets/models/plants/pumpkin.json and cabbage.json. */
+/** A crop at a growth stage, standing on the ground at the origin, drawn for a 0.5 m block (the game scales it to the real block size). Its boxes are in assets/models/plants/pumpkin.json and cabbage.json. */
 export function makeCrop(kind, stage) {
   return buildBoxModel(`plants/${kind}`, 0, stage).group;
 }

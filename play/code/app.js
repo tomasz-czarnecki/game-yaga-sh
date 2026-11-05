@@ -7,7 +7,7 @@
 import * as THREE from './lib/three.module.js';
 import { GLTFLoader } from './lib/loaders/GLTFLoader.js';
 import { loadBugLooks, makeBug } from './bug-models.js';
-import { loadBlocks, loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell, untillCell, wetCell, isWater } from './terrain.js';
+import { loadBlocks, loadWorld, terrainMeshes, groundY, walkable, nearest, waypoint, kindAt, blockCentre, tillCell, untillCell, wetCell, isWater, cellSize } from './terrain.js';
 import { rigAt, placeCamera, ZOOM } from './camera-rig.js';
 import { SWING, makeShovel, makeCan, makeSeedBag, attachInHand } from './tools.js';
 import { FARM, CROPS, CROP_KINDS, ripe, stageOf, daysLeft, atRisk, newPlot, makeCrop } from './farm.js';
@@ -1520,10 +1520,12 @@ function canDig(x, z) {
   return FARMABLE.includes(kindAt(x, z)) && walkable(x, z) && !OBSTACLES.some((o) => Math.hypot(x - o.x, z - o.z) < o.r - BODY_R + 0.7);
 }
 const plotAt = (x, z) => { const c = blockCentre(x, z); return S.plots.find((p) => p.x === c.x && p.z === c.z); };
-/** The saved plots, back on the map; one that no longer sits on diggable ground (the map or the farm moved) is dropped. */
+/** The crop models and the field marks are drawn for a 0.5 m block; this sizes them to the world's blocks. */
+const blockScale = () => cellSize() / 0.5;
+/** The saved plots, back on the map; one that no longer sits on diggable ground (the map or the farm moved) is dropped. Two on one block (the blocks grew): a crop wins. */
 function restorePlots() {
   const seen = new Set();
-  S.plots = S.plots.filter((p) => {
+  S.plots = [...S.plots].sort((a, b) => !!b.crop - !!a.crop).filter((p) => {
     const c = blockCentre(p.x, p.z), key = `${c.x},${c.z}`;
     if (seen.has(key) || !canDig(c.x, c.z)) return false;
     seen.add(key); p.x = c.x; p.z = c.z; p.was = kindAt(c.x, c.z);
@@ -1547,7 +1549,8 @@ function drawPlot(p) {
   if (v.root) scene.remove(v.root);
   v.root = null;
   if (!p.crop) return;
-  const root = v.root = makeCrop(p.crop, stage);
+  const root = v.root = new THREE.Group(), crop = makeCrop(p.crop, stage);
+  crop.scale.setScalar(blockScale()); root.add(crop);
   root.position.set(p.x, groundY(p.x, p.z), p.z);
   root.traverse((o) => { o.userData.pick = { kind: 'plot', ref: p }; });
   root.scale.setScalar(pop ? 0.4 * v.size : v.size);
@@ -2404,9 +2407,9 @@ function onUp(e) {
 let cellMark;
 const queueMarks = [], MARK_COL = { act: 0xD6A446, walk: 0xF0EADC, no: 0xC8442F, info: 0xF0EADC };
 function makeCellMarks() {
-  cellMark = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.45, depthWrite: false }));
+  cellMark = new THREE.Mesh(new THREE.PlaneGeometry(cellSize() * 0.92, cellSize() * 0.92), new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.45, depthWrite: false }));
   cellMark.rotation.x = -Math.PI / 2; cellMark.visible = false; scene.add(cellMark);
-  const outline = new THREE.RingGeometry(0.21, 0.27, 4, 1, Math.PI / 4); outline.rotateX(-Math.PI / 2);
+  const outline = new THREE.RingGeometry(0.21 * blockScale(), 0.27 * blockScale(), 4, 1, Math.PI / 4); outline.rotateX(-Math.PI / 2);
   for (let i = 0; i <= QUEUE_MAX; i++) {
     const m = new THREE.Mesh(outline, new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.75, depthWrite: false }));
     m.visible = false; scene.add(m); queueMarks.push(m);

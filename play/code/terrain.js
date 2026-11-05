@@ -156,6 +156,9 @@ export function kindAt(x, z) {
   return k < 0 ? '' : grid.kind[k];
 }
 
+/** How wide a block is, in metres (the map says; 0.75). */
+export const cellSize = () => grid.cell;
+
 /** The centre of the block under a point. */
 export function blockCentre(x, z) {
   const s = grid.cell;
